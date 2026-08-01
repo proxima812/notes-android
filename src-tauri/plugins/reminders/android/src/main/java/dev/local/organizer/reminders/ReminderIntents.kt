@@ -14,4 +14,6 @@ internal object ReminderIntents {
     const val EXTRA_REQUEST_CODE = "request_code"
     const val EXTRA_TITLE = "title"
     const val EXTRA_BODY = "body"
+    const val EXTRA_CHANNEL_ID = "channel_id"
+    const val EXTRA_VIBRATE = "vibrate"
 }

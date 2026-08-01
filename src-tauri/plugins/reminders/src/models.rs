@@ -18,6 +18,11 @@ pub struct ScheduleRequest {
     /// Request an exact alarm. The OS may refuse, so the response reports what
     /// was actually armed rather than what was asked for.
     pub exact: bool,
+    /// Android raw-resource name selected by the validated Rust catalog.
+    pub sound_id: String,
+    /// Human-readable channel label shown in Android settings.
+    pub sound_label: String,
+    pub vibrate: bool,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -82,3 +87,28 @@ pub struct PermissionRequestResponse {
 #[cfg(mobile)]
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub(crate) struct Empty {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn schedule_request_serializes_the_sound_contract_in_camel_case() {
+        let value = serde_json::to_value(ScheduleRequest {
+            occurrence_id: "occurrence".into(),
+            request_code: 7,
+            trigger_at_millis: 1_000,
+            title: "Title".into(),
+            body: "Body".into(),
+            exact: true,
+            sound_id: "death_and_rebirth".into(),
+            sound_label: "Death & Rebirth".into(),
+            vibrate: true,
+        })
+        .expect("serializes");
+
+        assert_eq!(value["soundId"], "death_and_rebirth");
+        assert_eq!(value["soundLabel"], "Death & Rebirth");
+        assert_eq!(value["vibrate"], true);
+    }
+}

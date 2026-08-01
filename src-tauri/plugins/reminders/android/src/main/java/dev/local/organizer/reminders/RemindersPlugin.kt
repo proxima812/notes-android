@@ -20,6 +20,9 @@ internal class ScheduleArgs {
     var title: String = ""
     var body: String = ""
     var exact: Boolean = true
+    var soundId: String = ""
+    var soundLabel: String = ""
+    var vibrate: Boolean = true
 }
 
 @InvokeArg
@@ -49,6 +52,12 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         try {
+            val channelId = ReminderNotifications.ensureChannel(
+                context = activity,
+                soundId = args.soundId,
+                soundLabel = args.soundLabel,
+                vibrate = args.vibrate,
+            )
             val armedExact = AlarmScheduler.schedule(
                 context = activity,
                 occurrenceId = args.occurrenceId,
@@ -57,8 +66,9 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
                 title = args.title,
                 body = args.body,
                 exact = args.exact,
+                channelId = channelId,
+                vibrate = args.vibrate,
             )
-            ReminderNotifications.ensureChannel(activity)
 
             val result = JSObject()
             result.put("scheduledExact", armedExact)

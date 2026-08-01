@@ -19,6 +19,9 @@ pub struct Alarm {
     /// Whether to ask for an exact alarm. The answer comes back from
     /// [`AlarmClock::schedule`], because the OS is free to refuse.
     pub exact: bool,
+    pub sound_id: String,
+    pub sound_label: String,
+    pub vibrate: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -26,8 +26,12 @@ class ReminderReceiver : BroadcastReceiver() {
         val requestCode = intent.getIntExtra(ReminderIntents.EXTRA_REQUEST_CODE, occurrenceId.hashCode())
         val title = intent.getStringExtra(ReminderIntents.EXTRA_TITLE).orEmpty()
         val body = intent.getStringExtra(ReminderIntents.EXTRA_BODY).orEmpty()
-
-        ReminderNotifications.ensureChannel(context)
+        val channelId = intent.getStringExtra(ReminderIntents.EXTRA_CHANNEL_ID)
+        if (channelId == null) {
+            Log.w(TAG, "получен будильник без канала уведомлений")
+            return
+        }
+        val vibrate = intent.getBooleanExtra(ReminderIntents.EXTRA_VIBRATE, true)
 
         // The plugin module cannot name the app's activity, so the launcher
         // intent is asked for by package instead.
@@ -46,7 +50,7 @@ class ReminderReceiver : BroadcastReceiver() {
             )
         }
 
-        val notification = NotificationCompat.Builder(context, ReminderNotifications.CHANNEL_ID)
+        val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_popup_reminder)
             .setContentTitle(title.ifEmpty { "Напоминание" })
             .setContentText(body)
@@ -54,6 +58,8 @@ class ReminderReceiver : BroadcastReceiver() {
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setAutoCancel(true)
+            .setOnlyAlertOnce(false)
+            .setVibrate(if (vibrate) longArrayOf(0, 250, 150, 250) else longArrayOf(0))
             .setContentIntent(contentIntent)
             .build()
 

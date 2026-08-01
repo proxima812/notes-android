@@ -24,6 +24,8 @@ internal object AlarmScheduler {
         title: String,
         body: String,
         exact: Boolean,
+        channelId: String,
+        vibrate: Boolean,
     ): Boolean {
         val manager = context.getSystemService(AlarmManager::class.java)
             ?: throw IllegalStateException("AlarmManager недоступен")
@@ -34,6 +36,8 @@ internal object AlarmScheduler {
             requestCode = requestCode,
             title = title,
             body = body,
+            channelId = channelId,
+            vibrate = vibrate,
             // An alarm being replaced must pick up the new title and time.
             flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -78,6 +82,8 @@ internal object AlarmScheduler {
         requestCode: Int,
         title: String,
         body: String,
+        channelId: String,
+        vibrate: Boolean,
         flags: Int,
     ): PendingIntent {
         val intent = Intent(context, ReminderReceiver::class.java).apply {
@@ -86,6 +92,8 @@ internal object AlarmScheduler {
             putExtra(ReminderIntents.EXTRA_REQUEST_CODE, requestCode)
             putExtra(ReminderIntents.EXTRA_TITLE, title)
             putExtra(ReminderIntents.EXTRA_BODY, body)
+            putExtra(ReminderIntents.EXTRA_CHANNEL_ID, channelId)
+            putExtra(ReminderIntents.EXTRA_VIBRATE, vibrate)
         }
         return PendingIntent.getBroadcast(context, requestCode, intent, flags)
     }
