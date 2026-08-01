@@ -1,0 +1,177 @@
+//! Tauri commands.
+//!
+//! Each command does three things and nothing more: take a validated request,
+//! hand it to a use case on a blocking thread, and wrap the outcome in
+//! [`CommandResult`]. No SQL and no business rules live here.
+//!
+//! Every command is `async` so Tauri runs it off the WebView thread, and the
+//! database work itself goes to a blocking pool — a slow query must never make
+//! the UI drop frames.
+
+use std::sync::Arc;
+
+use tauri::State;
+
+use crate::error::{AppError, AppResult, PlatformError};
+use crate::state::AppState;
+
+use super::dto::{
+    CommandResult, CreateNoteRequest, ListNotesRequest, NoteDto, NoteSummaryDto, PageDto,
+    SearchHitDto, SearchRequest, UpdateNoteRequest,
+};
+
+/// Runs blocking work on the pool and folds a panic or a join failure into a
+/// normal error, so a bug in one command cannot take the whole app down.
+async fn blocking<T, F>(work: F) -> CommandResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce() -> AppResult<T> + Send + 'static,
+{
+    match tauri::async_runtime::spawn_blocking(work).await {
+        Ok(result) => CommandResult::from(result),
+        Err(error) => {
+            tracing::error!(%error, "a command worker did not finish");
+            CommandResult::failed(&AppError::Platform(PlatformError::PluginCall {
+                reason: "worker join failed".to_owned(),
+            }))
+        }
+    }
+}
+
+/// Runtime facts for the diagnostics screen.
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfoDto {
+    pub name: String,
+    pub version: String,
+    pub platform: String,
+    pub schema_version: i64,
+    pub note_count: u32,
+}
+
+#[tauri::command]
+pub async fn app_info(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<CommandResult<AppInfoDto>, ()> {
+    let package = app.package_info().clone();
+    let notes = Arc::clone(&state.notes);
+
+    Ok(blocking(move || {
+        Ok(AppInfoDto {
+            name: package.name.clone(),
+            version: package.version.to_string(),
+            platform: std::env::consts::OS.to_owned(),
+            schema_version: crate::infrastructure::sqlite::migrations::latest_version(),
+            note_count: notes.count(&ListNotesRequest::default())?,
+        })
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn notes_create(
+    state: State<'_, AppState>,
+    request: CreateNoteRequest,
+) -> Result<CommandResult<NoteDto>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || notes.create(request.into()).map(NoteDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn notes_get(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<CommandResult<Option<NoteDto>>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || notes.get(&id).map(|note| note.map(NoteDto::from))).await)
+}
+
+#[tauri::command]
+pub async fn notes_update(
+    state: State<'_, AppState>,
+    id: String,
+    request: UpdateNoteRequest,
+) -> Result<CommandResult<NoteDto>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || notes.update(&id, request.into()).map(NoteDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn notes_list(
+    state: State<'_, AppState>,
+    request: ListNotesRequest,
+) -> Result<CommandResult<PageDto<NoteSummaryDto>>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || {
+        notes
+            .list(&request)
+            .map(|page| PageDto::from_page(page, NoteSummaryDto::from))
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn notes_trash(state: State<'_, AppState>, id: String) -> Result<CommandResult<()>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || notes.move_to_trash(&id)).await)
+}
+
+#[tauri::command]
+pub async fn notes_restore(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<CommandResult<NoteDto>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || notes.restore(&id).map(NoteDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn notes_purge(state: State<'_, AppState>, id: String) -> Result<CommandResult<()>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || notes.purge(&id)).await)
+}
+
+#[tauri::command]
+pub async fn notes_empty_trash(state: State<'_, AppState>) -> Result<CommandResult<u32>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || notes.empty_trash()).await)
+}
+
+#[tauri::command]
+pub async fn notes_duplicate(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<CommandResult<NoteDto>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || notes.duplicate(&id).map(NoteDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn search_run(
+    state: State<'_, AppState>,
+    request: SearchRequest,
+) -> Result<CommandResult<PageDto<SearchHitDto>>, ()> {
+    let search = Arc::clone(&state.search);
+    Ok(blocking(move || {
+        search
+            .search(&request)
+            .map(|page| PageDto::from_page(page, SearchHitDto::from))
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn search_recent(
+    state: State<'_, AppState>,
+    limit: Option<u32>,
+) -> Result<CommandResult<Vec<String>>, ()> {
+    let search = Arc::clone(&state.search);
+    Ok(blocking(move || search.recent_queries(limit)).await)
+}
+
+#[tauri::command]
+pub async fn search_clear_history(state: State<'_, AppState>) -> Result<CommandResult<()>, ()> {
+    let search = Arc::clone(&state.search);
+    Ok(blocking(move || search.clear_history()).await)
+}

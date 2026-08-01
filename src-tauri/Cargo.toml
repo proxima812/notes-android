@@ -25,6 +25,7 @@ chrono-tz = { version = "0.10", features = ["serde"] }
 # `bundled` compiles SQLite from source with FTS5 enabled, so the app never
 # depends on whatever ancient libsqlite3 a given Android image happens to ship.
 rusqlite = { version = "0.37", features = ["bundled", "chrono", "uuid", "backup", "functions"] }
+sha2 = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 parking_lot = "0.12"
