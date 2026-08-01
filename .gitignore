@@ -1,0 +1,50 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --- Signing material: NEVER commit these ---
+*.keystore
+*.jks
+*.p12
+*.pem
+keystore.properties
+key.properties
+release-signing.properties
+
+# --- Local environment ---
+.env
+.env.*
+!.env.example
+
+# --- Android build output ---
+src-tauri/gen/android/.gradle/
+src-tauri/gen/android/local.properties
+src-tauri/gen/android/build/
+src-tauri/gen/android/app/build/
+src-tauri/gen/android/buildSrc/build/
+src-tauri/gen/android/.idea/
+src-tauri/gen/android/app/src/main/assets/
+src-tauri/gen/android/app/src/main/jniLibs/
+*.apk
+*.aab

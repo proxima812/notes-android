@@ -1,0 +1,42 @@
+[package]
+name = "notes-android"
+version = "0.1.0"
+description = "Local-only notes, tasks and reminders"
+authors = ["local"]
+edition = "2021"
+rust-version = "1.82"
+
+[lib]
+# The `_lib` suffix keeps the library name distinct from the binary name.
+name = "notes_android_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
+chrono-tz = { version = "0.10", features = ["serde"] }
+# `bundled` compiles SQLite from source with FTS5 enabled, so the app never
+# depends on whatever ancient libsqlite3 a given Android image happens to ship.
+rusqlite = { version = "0.37", features = ["bundled", "chrono", "uuid", "backup", "functions"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+parking_lot = "0.12"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+# Reliability and size over build time: the reminder engine must not be
+# surprised by a panic unwinding across the JNI boundary.
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

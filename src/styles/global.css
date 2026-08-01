@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+/* Dark mode is driven by a `data-theme` attribute on <html> so that the app can
+   offer light / dark / OLED independently of the OS preference. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="oled"], [data-theme="oled"] *));
+
+@theme {
+  --color-surface: var(--app-surface);
+  --color-surface-raised: var(--app-surface-raised);
+  --color-surface-sunken: var(--app-surface-sunken);
+  --color-border-subtle: var(--app-border-subtle);
+  --color-content: var(--app-content);
+  --color-content-muted: var(--app-content-muted);
+  --color-accent: var(--app-accent);
+  --color-accent-content: var(--app-accent-content);
+  --color-danger: var(--app-danger);
+
+  /* Short, controlled motion — no long or bouncy transitions on a phone. */
+  --animate-duration-fast: 120ms;
+  --animate-duration-base: 180ms;
+}
+
+:root,
+[data-theme="light"] {
+  --app-surface: oklch(99% 0.002 250);
+  --app-surface-raised: oklch(100% 0 0);
+  --app-surface-sunken: oklch(96% 0.004 250);
+  --app-border-subtle: oklch(90% 0.006 250);
+  --app-content: oklch(22% 0.012 250);
+  --app-content-muted: oklch(52% 0.014 250);
+  --app-accent: oklch(58% 0.16 255);
+  --app-accent-content: oklch(99% 0 0);
+  --app-danger: oklch(56% 0.19 25);
+}
+
+[data-theme="dark"] {
+  --app-surface: oklch(21% 0.011 255);
+  --app-surface-raised: oklch(25% 0.012 255);
+  --app-surface-sunken: oklch(17% 0.010 255);
+  --app-border-subtle: oklch(32% 0.013 255);
+  --app-content: oklch(95% 0.005 255);
+  --app-content-muted: oklch(70% 0.011 255);
+  --app-accent: oklch(72% 0.13 255);
+  --app-accent-content: oklch(18% 0.02 255);
+  --app-danger: oklch(68% 0.16 25);
+}
+
+/* True black for the Pixel 8a OLED panel. */
+[data-theme="oled"] {
+  --app-surface: oklch(0% 0 0);
+  --app-surface-raised: oklch(13% 0.006 255);
+  --app-surface-sunken: oklch(0% 0 0);
+  --app-border-subtle: oklch(26% 0.010 255);
+  --app-content: oklch(96% 0.004 255);
+  --app-content-muted: oklch(68% 0.011 255);
+  --app-accent: oklch(74% 0.13 255);
+  --app-accent-content: oklch(10% 0.02 255);
+  --app-danger: oklch(70% 0.16 25);
+}
+
+@layer base {
+  html {
+    /* The WebView must never bounce or zoom — this is a native-feeling app. */
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    background-color: var(--app-surface);
+  }
+
+  body {
+    margin: 0;
+    overscroll-behavior: none;
+    background-color: var(--app-surface);
+    color: var(--app-content);
+    font-family:
+      "Inter", "Roboto", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-synthesis-weight: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Respect the Android gesture bar / status bar. */
+  #root {
+    min-height: 100dvh;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Text selection is intentional in the editor, not while tapping around. */
+  button,
+  [role="button"] {
+    user-select: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
