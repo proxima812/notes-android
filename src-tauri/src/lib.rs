@@ -41,6 +41,7 @@ pub fn run() {
     init_tracing();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_reminders::init())
         .setup(|app| {
             // The database lives in the app's private directory, which Android
             // wipes on uninstall and keeps out of reach of other apps.

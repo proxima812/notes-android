@@ -1,0 +1,6 @@
+[default]
+description = """
+Grants the WebView nothing. Reminders are armed by the Rust core, which reaches
+the Android APIs through this plugin directly.
+"""
+permissions = []

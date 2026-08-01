@@ -135,11 +135,20 @@ export interface CreateNoteRequest {
   readonly noteType?: NoteType;
   readonly title?: string;
   readonly contentText?: string;
+  readonly contentJson?: string;
+  readonly color?: string;
 }
 
+/**
+ * Every field is optional and an omitted one is left untouched. `null` is a
+ * deliberate value the core stores as SQL NULL, which is how a colour is
+ * cleared without the same call also wiping the body.
+ */
 export interface UpdateNoteRequest {
   readonly title?: string;
   readonly contentText?: string;
+  readonly contentJson?: string | null;
+  readonly color?: string | null;
   readonly isPinned?: boolean;
   readonly isFavorite?: boolean;
   readonly isArchived?: boolean;
@@ -180,6 +189,19 @@ export async function emptyTrash(): Promise<number> {
 
 export async function duplicateNote(id: NoteId): Promise<Note> {
   return callCommand("notes_duplicate", noteSchema, { id });
+}
+
+/** Done with, but kept for later reading. Distinct from the trash. */
+export async function archiveNote(id: NoteId): Promise<Note> {
+  return updateNote(id, { isArchived: true });
+}
+
+export async function unarchiveNote(id: NoteId): Promise<Note> {
+  return updateNote(id, { isArchived: false });
+}
+
+export async function recolorNote(id: NoteId, color: string | null): Promise<Note> {
+  return updateNote(id, { color });
 }
 
 // ------------------------------------------------------------- search --

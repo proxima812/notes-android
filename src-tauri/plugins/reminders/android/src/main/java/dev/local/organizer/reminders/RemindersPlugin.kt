@@ -1,0 +1,91 @@
+package dev.local.organizer.reminders
+
+import android.Manifest
+import android.app.Activity
+import android.app.AlarmManager
+import androidx.core.app.NotificationManagerCompat
+import app.tauri.annotation.Command
+import app.tauri.annotation.InvokeArg
+import app.tauri.annotation.Permission
+import app.tauri.annotation.TauriPlugin
+import app.tauri.plugin.Invoke
+import app.tauri.plugin.JSObject
+import app.tauri.plugin.Plugin
+
+@InvokeArg
+internal class ScheduleArgs {
+    var occurrenceId: String = ""
+    var requestCode: Int = 0
+    var triggerAtMillis: Long = 0
+    var title: String = ""
+    var body: String = ""
+    var exact: Boolean = true
+}
+
+@InvokeArg
+internal class CancelArgs {
+    var requestCode: Int = 0
+}
+
+/**
+ * The Android half of the reminders plugin.
+ *
+ * It contains no rule about when anything fires: the core decides the instant
+ * and the wording, and this only carries both to `AlarmManager`.
+ */
+@TauriPlugin(
+    permissions = [
+        Permission(strings = [Manifest.permission.POST_NOTIFICATIONS], alias = "notifications"),
+    ],
+)
+class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
+
+    @Command
+    fun schedule(invoke: Invoke) {
+        val args = invoke.parseArgs(ScheduleArgs::class.java)
+        if (args.occurrenceId.isEmpty()) {
+            invoke.reject("не задан идентификатор срабатывания")
+            return
+        }
+
+        try {
+            val armedExact = AlarmScheduler.schedule(
+                context = activity,
+                occurrenceId = args.occurrenceId,
+                requestCode = args.requestCode,
+                triggerAtMillis = args.triggerAtMillis,
+                title = args.title,
+                body = args.body,
+                exact = args.exact,
+            )
+            ReminderNotifications.ensureChannel(activity)
+
+            val result = JSObject()
+            result.put("scheduledExact", armedExact)
+            invoke.resolve(result)
+        } catch (failure: Exception) {
+            invoke.reject(failure.message ?: "не удалось поставить будильник")
+        }
+    }
+
+    @Command
+    fun cancel(invoke: Invoke) {
+        val args = invoke.parseArgs(CancelArgs::class.java)
+        AlarmScheduler.cancel(activity, args.requestCode)
+        invoke.resolve(JSObject())
+    }
+
+    @Command
+    fun permissionState(invoke: Invoke) {
+        // `areNotificationsEnabled` is the truthful answer: it also covers the
+        // user switching the app's notifications off in system settings, which
+        // a permission check alone would miss.
+        val enabled = NotificationManagerCompat.from(activity).areNotificationsEnabled()
+        val manager = activity.getSystemService(AlarmManager::class.java)
+
+        val result = JSObject()
+        result.put("notifications", if (enabled) "granted" else "prompt")
+        result.put("exactAlarms", manager != null && AlarmScheduler.canScheduleExact(manager))
+        invoke.resolve(result)
+    }
+}

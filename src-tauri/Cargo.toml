@@ -29,6 +29,9 @@ sha2 = "0.10"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 parking_lot = "0.12"
+# In-tree: the bridge to AlarmManager and NotificationManager. Kept a separate
+# crate because Tauri discovers a plugin's Android library project that way.
+tauri-plugin-reminders = { path = "plugins/reminders" }
 
 [dev-dependencies]
 tempfile = "3"
