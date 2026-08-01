@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { reminderSchema } from "../api";
 import { ReminderPanel, localDateTimeToMillis } from "./ReminderPanel";
 
 const sounds = {
@@ -45,5 +46,44 @@ describe("ReminderPanel", () => {
         scheduledAt: new Date("2030-01-02T03:04:00").getTime(),
       }),
     );
+  });
+
+  it("prefills and deletes an existing reminder", async () => {
+    const onDelete = vi.fn();
+    const initial = reminderSchema.parse({
+      id: "0193b3b2-4d3c-7c9a-8f2e-1a2b3c4d5e6f",
+      noteId: "0193b3b2-4d3c-7c9a-8f2e-1a2b3c4d5e70",
+      occurrenceId: "0193b3b2-4d3c-7c9a-8f2e-1a2b3c4d5e71",
+      title: "Выпить воду",
+      body: "",
+      scheduledAt: new Date("2030-01-02T03:04:00").getTime(),
+      timezone: "Asia/Almaty",
+      sound: "death_and_rebirth",
+      effectiveSoundId: "death_and_rebirth",
+      effectiveSoundLabel: "Death & Rebirth",
+      isExact: false,
+    });
+
+    render(
+      <ReminderPanel
+        initial={initial}
+        sounds={sounds}
+        noteTitle="Заметка"
+        busy={false}
+        error={null}
+        onSave={vi.fn()}
+        onDelete={onDelete}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByDisplayValue("Выпить воду")).toBeInTheDocument();
+    expect(
+      screen.getByRole("radio", { name: /^Death & Rebirth$/ }),
+    ).toBeChecked();
+    expect(screen.getByText(/Android может доставить/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
+    expect(onDelete).toHaveBeenCalledOnce();
   });
 });

@@ -1,13 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Palette } from "lucide-react";
+import { AlarmClock, ArrowLeft, Palette } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getNote, updateNote, type UpdateNoteRequest } from "@/features/notes/api";
 import { RichTextEditor, type EditorSnapshot } from "@/features/notes/editor/RichTextEditor";
 import { GradientPicker } from "@/features/notes/ui/GradientPicker";
+import {
+  deleteReminderForNote,
+  getReminderForNote,
+  listReminderSounds,
+  upsertReminderForNote,
+} from "@/features/reminders/api";
+import { ReminderPanel } from "@/features/reminders/ui/ReminderPanel";
 import { describeError } from "@/shared/api/errors";
 import { findGradient } from "@/shared/lib/gradients";
-import type { NoteId } from "@/shared/types/ids";
+import { deviceTimeZone, type NoteId } from "@/shared/types/ids";
 
 /** Idle time before an edit is persisted. Long enough to coalesce typing. */
 const AUTOSAVE_DELAY_MS = 600;
@@ -93,14 +100,39 @@ interface LoadedProps {
  * without the inputs being re-seeded on every refetch.
  */
 function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Element {
+  const client = useQueryClient();
   const [title, setTitle] = useState(note.title);
+  const [currentContentText, setCurrentContentText] = useState(note.contentText);
   const [color, setColor] = useState(note.color);
   const [showColors, setShowColors] = useState(false);
+  const [showReminder, setShowReminder] = useState(false);
+
+  const reminder = useQuery({
+    queryKey: ["reminder", note.id],
+    queryFn: () => getReminderForNote(note.id),
+  });
+  const sounds = useQuery({
+    queryKey: ["reminder-sounds"],
+    queryFn: listReminderSounds,
+  });
+  const saveReminder = useMutation({
+    mutationFn: upsertReminderForNote,
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["reminder", note.id] });
+    },
+  });
+  const removeReminder = useMutation({
+    mutationFn: () => deleteReminderForNote(note.id),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: ["reminder", note.id] });
+    },
+  });
 
   const gradient = findGradient(color);
 
   const onBody = useCallback(
     (snapshot: EditorSnapshot): void => {
+      setCurrentContentText(snapshot.contentText);
       onPatch({ contentText: snapshot.contentText, contentJson: snapshot.contentJson });
     },
     [onPatch],
@@ -127,6 +159,22 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
 
         <button
           type="button"
+          aria-label="Напоминание"
+          aria-pressed={showReminder}
+          onClick={() => {
+            setShowReminder((open) => !open);
+          }}
+          className={`flex size-11 shrink-0 items-center justify-center rounded-full ${
+            reminder.data === undefined || reminder.data === null
+              ? "text-content"
+              : "text-accent"
+          }`}
+        >
+          <AlarmClock className="size-5" />
+        </button>
+
+        <button
+          type="button"
           aria-label="Цвет заметки"
           aria-pressed={showColors}
           onClick={() => {
@@ -137,6 +185,48 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
           <Palette className="size-5" />
         </button>
       </header>
+
+      {showReminder && (
+        <div className="px-4 pb-2">
+          {reminder.isPending || sounds.isPending ? (
+            <p className="text-content-muted py-3 text-sm">Загрузка напоминания…</p>
+          ) : reminder.error !== null || sounds.error !== null ? (
+            <p className="text-danger py-3 text-sm">
+              {describeError(reminder.error ?? sounds.error)}
+            </p>
+          ) : reminder.data !== undefined && sounds.data !== undefined ? (
+            <ReminderPanel
+              initial={reminder.data}
+              sounds={sounds.data}
+              noteTitle={title}
+              busy={saveReminder.isPending || removeReminder.isPending}
+              error={
+                saveReminder.error !== null
+                  ? describeError(saveReminder.error)
+                  : removeReminder.error !== null
+                    ? describeError(removeReminder.error)
+                    : null
+              }
+              onSave={(value) => {
+                saveReminder.mutate({
+                  noteId: note.id,
+                  title: value.title,
+                  body: currentContentText,
+                  scheduledAt: value.scheduledAt,
+                  timezone: deviceTimeZone(),
+                  sound: value.sound,
+                });
+              }}
+              onDelete={() => {
+                removeReminder.mutate();
+              }}
+              onClose={() => {
+                setShowReminder(false);
+              }}
+            />
+          ) : null}
+        </div>
+      )}
 
       {showColors && (
         <div className="px-4 pb-2">
