@@ -13,6 +13,8 @@ use crate::domain::notes::{
 use crate::domain::search::{SearchEntity, SearchHit, SearchQuery};
 use crate::error::{AppError, AppErrorDto};
 
+use super::use_cases::{ReminderSoundCatalog, ReminderView};
+
 /// Uniform envelope for every command.
 ///
 /// A failure is an ordinary value here rather than a rejected promise carrying
@@ -410,6 +412,82 @@ impl SearchRequest {
     }
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertReminderRequest {
+    pub note_id: String,
+    pub title: String,
+    pub body: String,
+    pub scheduled_at: i64,
+    pub timezone: String,
+    pub sound: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderDto {
+    pub id: String,
+    pub note_id: String,
+    pub occurrence_id: String,
+    pub title: String,
+    pub body: String,
+    pub scheduled_at: i64,
+    pub timezone: String,
+    pub sound: String,
+    pub effective_sound_id: String,
+    pub effective_sound_label: String,
+    pub is_exact: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderSoundDto {
+    pub id: String,
+    pub label: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReminderSoundCatalogDto {
+    pub default_sound_id: String,
+    pub items: Vec<ReminderSoundDto>,
+}
+
+impl From<ReminderView> for ReminderDto {
+    fn from(view: ReminderView) -> Self {
+        let scheduled = view.scheduled;
+        Self {
+            id: scheduled.reminder.id.to_string(),
+            note_id: scheduled.reminder.note_id.to_string(),
+            occurrence_id: scheduled.occurrence.id.to_string(),
+            title: scheduled.reminder.title,
+            body: scheduled.reminder.body,
+            scheduled_at: scheduled.reminder.scheduled_at.as_millis(),
+            timezone: scheduled.reminder.timezone,
+            sound: scheduled.reminder.sound,
+            effective_sound_id: view.effective_sound.id.to_owned(),
+            effective_sound_label: view.effective_sound.label.to_owned(),
+            is_exact: scheduled.occurrence.is_exact,
+        }
+    }
+}
+
+impl From<ReminderSoundCatalog> for ReminderSoundCatalogDto {
+    fn from(catalog: ReminderSoundCatalog) -> Self {
+        Self {
+            default_sound_id: catalog.default_sound_id,
+            items: catalog
+                .items
+                .into_iter()
+                .map(|preset| ReminderSoundDto {
+                    id: preset.id.to_owned(),
+                    label: preset.label.to_owned(),
+                })
+                .collect(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -525,5 +603,82 @@ mod tests {
         let set: UpdateNoteRequest =
             serde_json::from_str(r#"{"color":"red"}"#).expect("deserialises");
         assert_eq!(set.color, Some(Some("red".to_owned())));
+    }
+
+    #[test]
+    fn a_reminder_dto_exposes_the_effective_sound_and_accuracy() {
+        let json = serde_json::to_value(ReminderDto {
+            id: "reminder".to_owned(),
+            note_id: "note".to_owned(),
+            occurrence_id: "occurrence".to_owned(),
+            title: "Проверить".to_owned(),
+            body: String::new(),
+            scheduled_at: 1_800_000_000_000,
+            timezone: "Asia/Almaty".to_owned(),
+            sound: "default".to_owned(),
+            effective_sound_id: "death_and_rebirth".to_owned(),
+            effective_sound_label: "Death & Rebirth".to_owned(),
+            is_exact: false,
+        })
+        .expect("serialises");
+
+        assert_eq!(json["effectiveSoundId"], "death_and_rebirth");
+        assert_eq!(json["effectiveSoundLabel"], "Death & Rebirth");
+        assert_eq!(json["isExact"], false);
+    }
+
+    #[test]
+    fn a_reminder_view_converts_to_the_wire_contract() {
+        use crate::application::use_cases::ReminderView;
+        use crate::domain::clock::Timestamp;
+        use crate::domain::ids::{NoteId, ReminderId, ReminderOccurrenceId};
+        use crate::domain::reminders::{
+            Reminder, ReminderOccurrence, ScheduledReminder, SOUND_PRESETS,
+        };
+
+        let note_id = NoteId::new();
+        let reminder_id = ReminderId::new();
+        let occurrence_id = ReminderOccurrenceId::new();
+        let dto = ReminderDto::from(ReminderView {
+            scheduled: ScheduledReminder {
+                reminder: Reminder {
+                    id: reminder_id,
+                    note_id,
+                    title: "Проверить".into(),
+                    body: "Текст".into(),
+                    scheduled_at: Timestamp::from_millis(2_000),
+                    timezone: "Asia/Almaty".into(),
+                    sound: "default".into(),
+                    is_enabled: true,
+                },
+                occurrence: ReminderOccurrence {
+                    id: occurrence_id,
+                    reminder_id,
+                    occurrence_at: Timestamp::from_millis(2_000),
+                    alarm_request_code: 7,
+                    is_exact: true,
+                },
+            },
+            effective_sound: SOUND_PRESETS[0],
+        });
+
+        assert_eq!(dto.note_id, note_id.to_string());
+        assert_eq!(dto.occurrence_id, occurrence_id.to_string());
+        assert_eq!(dto.effective_sound_id, "death_and_rebirth");
+    }
+
+    #[test]
+    fn a_sound_catalog_converts_to_the_wire_contract() {
+        use crate::application::use_cases::ReminderSoundCatalog;
+        use crate::domain::reminders::SOUND_PRESETS;
+
+        let dto = ReminderSoundCatalogDto::from(ReminderSoundCatalog {
+            default_sound_id: "death_and_rebirth".into(),
+            items: SOUND_PRESETS.to_vec(),
+        });
+
+        assert_eq!(dto.default_sound_id, "death_and_rebirth");
+        assert_eq!(dto.items.len(), 1);
+        assert_eq!(dto.items[0].id, "death_and_rebirth");
     }
 }

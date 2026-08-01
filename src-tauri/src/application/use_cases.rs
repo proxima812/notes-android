@@ -6,12 +6,20 @@
 
 use std::sync::Arc;
 
+use crate::domain::clock::{SharedClock, Timestamp};
 use crate::domain::ids::NoteId;
-use crate::domain::notes::{Note, NoteRepository, Page, PageRequest};
+use crate::domain::notes::{
+    validate_content, validate_title, Note, NoteRepository, Page, PageRequest,
+};
+use crate::domain::reminders::{
+    resolve_sound, sound_presets, ReminderDraft, ReminderRepository, ScheduledReminder,
+    SoundPreset, FALLBACK_SOUND_ID,
+};
 use crate::domain::search::{SearchHit, SearchRepository};
-use crate::error::AppResult;
+use crate::error::{AppError, AppResult, NotificationError, ValidationError};
+use crate::platform::{Alarm, AlarmClock};
 
-use super::dto::{ListNotesRequest, SearchRequest};
+use super::dto::{ListNotesRequest, SearchRequest, UpsertReminderRequest};
 
 pub struct NoteUseCases {
     notes: Arc<dyn NoteRepository>,
@@ -85,6 +93,212 @@ impl NoteUseCases {
     }
 }
 
+#[derive(Debug)]
+pub struct ReminderView {
+    pub scheduled: ScheduledReminder,
+    pub effective_sound: SoundPreset,
+}
+
+#[derive(Debug)]
+pub struct ReminderSoundCatalog {
+    pub default_sound_id: String,
+    pub items: Vec<SoundPreset>,
+}
+
+pub struct ReminderUseCases {
+    reminders: Arc<dyn ReminderRepository>,
+    alarms: Arc<dyn AlarmClock>,
+    clock: SharedClock,
+}
+
+impl ReminderUseCases {
+    #[must_use]
+    pub fn new(
+        reminders: Arc<dyn ReminderRepository>,
+        alarms: Arc<dyn AlarmClock>,
+        clock: SharedClock,
+    ) -> Self {
+        Self {
+            reminders,
+            alarms,
+            clock,
+        }
+    }
+
+    /// Returns the future active reminder for a note.
+    ///
+    /// # Errors
+    /// Fails for a malformed note id, invalid sound setting, or storage errors.
+    pub fn get_for_note(&self, note_id: &str) -> AppResult<Option<ReminderView>> {
+        let note_id = NoteId::parse(note_id)?;
+        let configured_default = self.reminders.default_sound_id()?;
+        self.reminders
+            .find_active_for_note(note_id, self.clock.now())?
+            .map(|scheduled| {
+                let effective_sound =
+                    resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
+                Ok(ReminderView {
+                    scheduled,
+                    effective_sound,
+                })
+            })
+            .transpose()
+    }
+
+    /// Creates or replaces the note's one active reminder.
+    ///
+    /// # Errors
+    /// Fails on validation, denied notifications, storage, or platform errors.
+    pub fn upsert_for_note(&self, request: UpsertReminderRequest) -> AppResult<ReminderView> {
+        let note_id = NoteId::parse(&request.note_id)?;
+        let scheduled_at = Timestamp::from_millis(request.scheduled_at);
+        if scheduled_at <= self.clock.now() {
+            return Err(AppError::Validation(ValidationError::TimeInPast));
+        }
+        let title = request.title.trim();
+        if title.is_empty() {
+            return Err(AppError::Validation(ValidationError::Required {
+                field: "title",
+            }));
+        }
+        validate_title(title)?;
+        validate_content(&request.body)?;
+        if request.timezone.parse::<chrono_tz::Tz>().is_err() {
+            return Err(AppError::Validation(ValidationError::UnknownTimeZone {
+                value: request.timezone,
+            }));
+        }
+
+        let configured_default = self.reminders.default_sound_id()?;
+        let effective_sound = resolve_sound(&request.sound, configured_default.as_deref())?;
+        let permissions = self.alarms.permissions()?;
+        if !permissions.notifications_granted && !self.alarms.request_notification_permission()? {
+            return Err(AppError::Notification(
+                NotificationError::NotificationsDenied,
+            ));
+        }
+
+        let draft = ReminderDraft {
+            note_id,
+            title: title.to_owned(),
+            body: request.body,
+            scheduled_at,
+            timezone: request.timezone,
+            sound: request.sound,
+        };
+        let alarms = Arc::clone(&self.alarms);
+        let mut applied: Option<(Option<ScheduledReminder>, ScheduledReminder)> = None;
+        let result = self
+            .reminders
+            .upsert_for_note(draft, &mut |previous, next| {
+                applied = Some((previous.cloned(), next.clone()));
+                alarms.schedule(&alarm_from(next, effective_sound))
+            });
+
+        match result {
+            Ok(scheduled) => Ok(ReminderView {
+                scheduled,
+                effective_sound,
+            }),
+            Err(error) => {
+                if let Some((previous, next)) = applied {
+                    let _ = self.alarms.cancel(next.occurrence.alarm_request_code);
+                    if let Some(old) = previous {
+                        if let Ok(old_sound) =
+                            resolve_sound(&old.reminder.sound, configured_default.as_deref())
+                        {
+                            let _ = self.alarms.schedule(&alarm_from(&old, old_sound));
+                        }
+                    }
+                }
+                Err(error)
+            }
+        }
+    }
+
+    /// Cancels and soft-deletes a note reminder.
+    ///
+    /// # Errors
+    /// Fails for a malformed note id, storage errors, or platform errors.
+    pub fn delete_for_note(&self, note_id: &str) -> AppResult<Option<ReminderView>> {
+        let note_id = NoteId::parse(note_id)?;
+        let configured_default = self.reminders.default_sound_id()?;
+        let alarms = Arc::clone(&self.alarms);
+        let mut cancelled: Option<ScheduledReminder> = None;
+        let result = self.reminders.delete_for_note(note_id, &mut |current| {
+            cancelled = Some(current.clone());
+            alarms.cancel(current.occurrence.alarm_request_code)
+        });
+
+        match result {
+            Ok(Some(scheduled)) => {
+                let effective_sound =
+                    resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
+                Ok(Some(ReminderView {
+                    scheduled,
+                    effective_sound,
+                }))
+            }
+            Ok(None) => Ok(None),
+            Err(error) => {
+                if let Some(previous) = cancelled {
+                    if let Ok(sound) =
+                        resolve_sound(&previous.reminder.sound, configured_default.as_deref())
+                    {
+                        let _ = self.alarms.schedule(&alarm_from(&previous, sound));
+                    }
+                }
+                Err(error)
+            }
+        }
+    }
+
+    /// Returns sound choices and the concrete global default.
+    ///
+    /// # Errors
+    /// Fails when the stored default is not in the bundled catalog.
+    pub fn sound_catalog(&self) -> AppResult<ReminderSoundCatalog> {
+        let configured = self.reminders.default_sound_id()?;
+        let default = configured.as_deref().unwrap_or(FALLBACK_SOUND_ID);
+        let preset = resolve_sound(default, None)?;
+        Ok(ReminderSoundCatalog {
+            default_sound_id: preset.id.to_owned(),
+            items: sound_presets().to_vec(),
+        })
+    }
+}
+
+fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> Alarm {
+    Alarm {
+        occurrence_id: scheduled.occurrence.id.to_string(),
+        request_code: scheduled.occurrence.alarm_request_code,
+        trigger_at: scheduled.occurrence.occurrence_at,
+        title: scheduled.reminder.title.clone(),
+        body: scheduled.reminder.body.clone(),
+        exact: true,
+        sound_id: sound.resource_name.to_owned(),
+        sound_label: sound.label.to_owned(),
+        vibrate: true,
+    }
+}
+
+/// Moves a note to trash and cancels its active reminder as one user action.
+///
+/// # Errors
+/// Restores the note when reminder cancellation or persistence fails.
+pub fn move_note_to_trash(
+    notes: &NoteUseCases,
+    reminders: &ReminderUseCases,
+    id: &str,
+) -> AppResult<()> {
+    notes.move_to_trash(id)?;
+    if let Err(error) = reminders.delete_for_note(id) {
+        let _ = notes.restore(id);
+        return Err(error);
+    }
+    Ok(())
+}
+
 pub struct SearchUseCases {
     search: Arc<dyn SearchRepository>,
 }
@@ -146,13 +360,94 @@ pub fn default_page() -> PageRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::application::dto::UpsertReminderRequest;
     use crate::domain::clock::{FixedClock, SharedClock, Timestamp};
     use crate::domain::notes::NoteDraft;
-    use crate::infrastructure::sqlite::{Database, SqliteNoteRepository, SqliteSearchRepository};
+    use crate::infrastructure::sqlite::{
+        Database, SqliteNoteRepository, SqliteReminderRepository, SqliteSearchRepository,
+    };
+    use crate::platform::{Alarm, AlarmClock, AlarmPermissions};
 
     struct Fixture {
         notes: NoteUseCases,
         search: SearchUseCases,
+    }
+
+    #[derive(Default)]
+    struct FakeAlarmClock {
+        scheduled: parking_lot::Mutex<Vec<Alarm>>,
+        cancelled: parking_lot::Mutex<Vec<i32>>,
+        notifications_granted: bool,
+        exact: bool,
+    }
+
+    impl AlarmClock for FakeAlarmClock {
+        fn schedule(&self, alarm: &Alarm) -> AppResult<bool> {
+            self.scheduled.lock().push(alarm.clone());
+            Ok(self.exact)
+        }
+
+        fn cancel(&self, request_code: i32) -> AppResult<()> {
+            self.cancelled.lock().push(request_code);
+            Ok(())
+        }
+
+        fn permissions(&self) -> AppResult<AlarmPermissions> {
+            Ok(AlarmPermissions {
+                notifications_granted: self.notifications_granted,
+                exact_allowed: self.exact,
+            })
+        }
+
+        fn request_notification_permission(&self) -> AppResult<bool> {
+            Ok(self.notifications_granted)
+        }
+    }
+
+    struct ReminderFixture {
+        notes: NoteUseCases,
+        reminders: ReminderUseCases,
+        note_id: NoteId,
+        alarms: Arc<FakeAlarmClock>,
+    }
+
+    fn reminder_fixture(notifications_granted: bool, exact: bool) -> ReminderFixture {
+        let clock: SharedClock = Arc::new(FixedClock::new(Timestamp::from_millis(1_000)));
+        let database = Arc::new(Database::open_in_memory(1_000).expect("opens"));
+        let note_repository = Arc::new(SqliteNoteRepository::new(
+            Arc::clone(&database),
+            Arc::clone(&clock),
+        ));
+        let note = note_repository
+            .create(NoteDraft {
+                title: Some("Заметка".into()),
+                ..NoteDraft::default()
+            })
+            .expect("creates note");
+        let alarms = Arc::new(FakeAlarmClock {
+            notifications_granted,
+            exact,
+            ..FakeAlarmClock::default()
+        });
+        let reminder_repository =
+            Arc::new(SqliteReminderRepository::new(database, Arc::clone(&clock)));
+        ReminderFixture {
+            notes: NoteUseCases::new(note_repository),
+            reminders: ReminderUseCases::new(reminder_repository, alarms.clone(), clock),
+            note_id: note.id,
+            alarms,
+        }
+    }
+
+    fn valid_reminder_request(note_id: NoteId) -> UpsertReminderRequest {
+        UpsertReminderRequest {
+            note_id: note_id.to_string(),
+            title: "Проверить".into(),
+            body: "Текст".into(),
+            scheduled_at: 2_000,
+            timezone: "Asia/Almaty".into(),
+            sound: "default".into(),
+        }
     }
 
     fn fixture() -> Fixture {
@@ -287,5 +582,82 @@ mod tests {
             })
             .expect("searches");
         assert!(f.search.recent_queries(None).expect("reads").is_empty());
+    }
+
+    #[test]
+    fn reminder_upsert_rejects_past_time_before_touching_android() {
+        let fixture = reminder_fixture(true, true);
+        let mut request = valid_reminder_request(fixture.note_id);
+        request.scheduled_at = 999;
+
+        let error = fixture
+            .reminders
+            .upsert_for_note(request)
+            .expect_err("past time fails");
+
+        assert_eq!(error.code(), "validation_time_in_past");
+        assert!(fixture.alarms.scheduled.lock().is_empty());
+    }
+
+    #[test]
+    fn reminder_upsert_resolves_default_sound_and_records_inexact_fallback() {
+        let fixture = reminder_fixture(true, false);
+
+        let stored = fixture
+            .reminders
+            .upsert_for_note(valid_reminder_request(fixture.note_id))
+            .expect("schedules");
+
+        assert_eq!(stored.effective_sound.id, "death_and_rebirth");
+        assert!(!stored.scheduled.occurrence.is_exact);
+        assert_eq!(
+            fixture.alarms.scheduled.lock()[0].sound_id,
+            "death_and_rebirth"
+        );
+    }
+
+    #[test]
+    fn denied_notifications_do_not_create_a_database_row() {
+        let fixture = reminder_fixture(false, true);
+
+        let error = fixture
+            .reminders
+            .upsert_for_note(valid_reminder_request(fixture.note_id))
+            .expect_err("denied");
+
+        assert_eq!(error.code(), "notification_permission_denied");
+        assert!(fixture
+            .reminders
+            .get_for_note(&fixture.note_id.to_string())
+            .expect("reads")
+            .is_none());
+    }
+
+    #[test]
+    fn moving_a_note_to_trash_cancels_its_active_reminder() {
+        let fixture = reminder_fixture(true, true);
+        let scheduled = fixture
+            .reminders
+            .upsert_for_note(valid_reminder_request(fixture.note_id))
+            .expect("schedules");
+
+        move_note_to_trash(
+            &fixture.notes,
+            &fixture.reminders,
+            &fixture.note_id.to_string(),
+        )
+        .expect("trashes");
+
+        assert_eq!(
+            fixture.alarms.cancelled.lock().as_slice(),
+            &[scheduled.scheduled.occurrence.alarm_request_code]
+        );
+        assert_eq!(
+            fixture
+                .notes
+                .count(&ListNotesRequest::default())
+                .expect("counts"),
+            0
+        );
     }
 }
