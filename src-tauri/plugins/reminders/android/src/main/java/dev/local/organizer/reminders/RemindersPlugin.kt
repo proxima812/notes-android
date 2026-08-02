@@ -26,6 +26,7 @@ internal class ScheduleArgs {
     var soundId: String = ""
     var soundLabel: String = ""
     var vibrate: Boolean = true
+    var snoozeMinutes: Int = ArmedAlarm.DEFAULT_SNOOZE_MINUTES
 }
 
 @InvokeArg
@@ -108,6 +109,7 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
                     soundLabel = args.soundLabel,
                     vibrate = args.vibrate,
                     exact = args.exact,
+                    snoozeMinutes = args.snoozeMinutes,
                 ),
             )
 

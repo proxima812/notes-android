@@ -18,6 +18,7 @@ class ArmedAlarmTest {
         soundLabel = "Death & Rebirth",
         vibrate = false,
         exact = true,
+        snoozeMinutes = 15,
     )
 
     @Test
@@ -43,6 +44,11 @@ class ArmedAlarmTest {
     }
 
     @Test
+    fun `how long later means survives the round trip`() {
+        assertEquals(15, ArmedAlarm.fromJson(alarm.toJson()).snoozeMinutes)
+    }
+
+    @Test
     fun `optional text defaults to empty rather than failing`() {
         val minimal = """
             {"occurrence_id":"a","request_code":1,"trigger_at":2,"sound_id":"death_and_rebirth"}
@@ -54,5 +60,10 @@ class ArmedAlarmTest {
         assertEquals("", restored.body)
         assertEquals("a reminder vibrates unless it was told otherwise", true, restored.vibrate)
         assertEquals("and asks for an exact alarm unless it was told otherwise", true, restored.exact)
+        assertEquals(
+            "a record from before snoozing existed falls back to the schema default",
+            ArmedAlarm.DEFAULT_SNOOZE_MINUTES,
+            restored.snoozeMinutes,
+        )
     }
 }

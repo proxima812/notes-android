@@ -26,6 +26,8 @@ pub struct ScheduleRequest {
     /// Human-readable channel label shown in Android settings.
     pub sound_label: String,
     pub vibrate: bool,
+    /// Minutes the notification's "later" button moves the reminder by.
+    pub snooze_minutes: i64,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]

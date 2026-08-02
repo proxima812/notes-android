@@ -94,6 +94,12 @@ internal object AlarmScheduler {
             putExtra(ReminderIntents.EXTRA_BODY, alarm.body)
             putExtra(ReminderIntents.EXTRA_CHANNEL_ID, channelId)
             putExtra(ReminderIntents.EXTRA_VIBRATE, alarm.vibrate)
+            // Carried so the notification's "later" button can arm the same
+            // reminder again without anything reading the database.
+            putExtra(ReminderIntents.EXTRA_SNOOZE_MINUTES, alarm.snoozeMinutes)
+            putExtra(ReminderIntents.EXTRA_SOUND_ID, alarm.soundId)
+            putExtra(ReminderIntents.EXTRA_SOUND_LABEL, alarm.soundLabel)
+            putExtra(ReminderIntents.EXTRA_EXACT, alarm.exact)
         }
         return PendingIntent.getBroadcast(context, alarm.requestCode, intent, flags)
     }

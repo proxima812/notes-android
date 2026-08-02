@@ -17,6 +17,8 @@ internal data class ArmedAlarm(
     val soundLabel: String,
     val vibrate: Boolean,
     val exact: Boolean,
+    /** Minutes the notification's "later" button moves it by. */
+    val snoozeMinutes: Int,
 ) {
     fun toJson(): String = JSONObject().apply {
         put(KEY_OCCURRENCE_ID, occurrenceId)
@@ -29,6 +31,7 @@ internal data class ArmedAlarm(
         put(KEY_SOUND_LABEL, soundLabel)
         put(KEY_VIBRATE, vibrate)
         put(KEY_EXACT, exact)
+        put(KEY_SNOOZE_MINUTES, snoozeMinutes)
     }.toString()
 
     internal companion object {
@@ -42,6 +45,10 @@ internal data class ArmedAlarm(
         private const val KEY_SOUND_LABEL = "sound_label"
         private const val KEY_VIBRATE = "vibrate"
         private const val KEY_EXACT = "exact"
+        private const val KEY_SNOOZE_MINUTES = "snooze_minutes"
+
+        /** Matches the column default in the schema. */
+        const val DEFAULT_SNOOZE_MINUTES = 10
 
         fun fromJson(raw: String): ArmedAlarm = JSONObject(raw).let { json ->
             ArmedAlarm(
@@ -55,6 +62,7 @@ internal data class ArmedAlarm(
                 soundLabel = json.optString(KEY_SOUND_LABEL),
                 vibrate = json.optBoolean(KEY_VIBRATE, true),
                 exact = json.optBoolean(KEY_EXACT, true),
+                snoozeMinutes = json.optInt(KEY_SNOOZE_MINUTES, DEFAULT_SNOOZE_MINUTES),
             )
         }
     }

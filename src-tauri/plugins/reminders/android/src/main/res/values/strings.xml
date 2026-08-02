@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The notification is built by a broadcast receiver that may run with the
+         app process dead, so its wording cannot come from the interface's own
+         translations. Android resources are the only thing available there. -->
+    <string name="reminder_snooze">Отложить</string>
+</resources>

@@ -456,6 +456,7 @@ pub(super) fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> A
         sound_id: sound.resource_name.to_owned(),
         sound_label: sound.label.to_owned(),
         vibrate: true,
+        snooze_minutes: scheduled.reminder.snooze_minutes,
     }
 }
 

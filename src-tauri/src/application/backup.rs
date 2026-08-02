@@ -548,6 +548,7 @@ mod tests {
                 timezone: "Asia/Almaty".into(),
                 sound: "default".into(),
                 recurrence: None,
+                snooze_minutes: 10,
                 is_enabled: true,
             },
             occurrence: ReminderOccurrence {

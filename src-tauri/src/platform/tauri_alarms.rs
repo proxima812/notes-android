@@ -32,6 +32,7 @@ impl<R: Runtime> AlarmClock for TauriAlarmClock<R> {
             sound_id: alarm.sound_id.clone(),
             sound_label: alarm.sound_label.clone(),
             vibrate: alarm.vibrate,
+            snooze_minutes: alarm.snooze_minutes,
         };
 
         self.app

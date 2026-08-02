@@ -17,6 +17,7 @@ class RestorePlannerTest {
         soundLabel = "Death & Rebirth",
         vibrate = true,
         exact = true,
+        snoozeMinutes = 10,
     )
 
     private val now = 1_800_000_000_000L

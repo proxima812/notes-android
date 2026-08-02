@@ -44,13 +44,13 @@ impl SqliteReminderRepository {
 const SELECT_SCHEDULED: &str =
     "SELECT r.id, r.note_id, r.title, r.body, r.scheduled_at, r.timezone,
             r.sound, r.is_enabled, o.id, o.reminder_id, o.occurrence_at,
-            o.alarm_request_code, o.is_exact, r.recurrence_rule
+            o.alarm_request_code, o.is_exact, r.recurrence_rule, r.snooze_minutes
        FROM reminders r
        JOIN reminder_occurrences o ON o.reminder_id = r.id";
 
 const SELECT_REMINDER: &str =
     "SELECT id, note_id, title, body, scheduled_at, timezone, sound, is_enabled,
-            recurrence_rule
+            recurrence_rule, snooze_minutes
        FROM reminders";
 
 /// A rule the database holds but this build does not understand is treated as
@@ -71,6 +71,7 @@ fn map_reminder(row: &Row<'_>) -> rusqlite::Result<Reminder> {
         sound: row.get(6)?,
         is_enabled: row.get::<_, i64>(7)? != 0,
         recurrence: read_recurrence(row.get(8)?),
+        snooze_minutes: row.get(9)?,
     })
 }
 
@@ -86,6 +87,7 @@ fn map_scheduled(row: &Row<'_>) -> rusqlite::Result<ScheduledReminder> {
             sound: row.get(6)?,
             is_enabled: row.get::<_, i64>(7)? != 0,
             recurrence: read_recurrence(row.get(13)?),
+            snooze_minutes: row.get(14)?,
         },
         occurrence: ReminderOccurrence {
             id: row.get(8)?,

@@ -24,6 +24,9 @@ pub struct Alarm {
     pub sound_id: String,
     pub sound_label: String,
     pub vibrate: bool,
+    /// How long "later" means when the user presses the notification's own
+    /// button. Decided here so no rule about it lives on the Kotlin side.
+    pub snooze_minutes: i64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

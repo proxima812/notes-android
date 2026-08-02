@@ -70,6 +70,8 @@ pub struct Reminder {
     pub sound: String,
     /// `None` for a reminder that happens once.
     pub recurrence: Option<Recurrence>,
+    /// Minutes the notification's "later" button moves this reminder by.
+    pub snooze_minutes: i64,
     pub is_enabled: bool,
 }
 
