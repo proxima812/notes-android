@@ -255,20 +255,6 @@ fn fetch_reminder(transaction: &Transaction<'_>, reminder_id: ReminderId) -> App
         .map_err(AppError::from)
 }
 
-fn fetch_reminder_for_note(
-    transaction: &Transaction<'_>,
-    note_id: NoteId,
-) -> AppResult<Option<Reminder>> {
-    transaction
-        .query_row(
-            &format!("{SELECT_REMINDER} WHERE note_id = ?1 ORDER BY created_at DESC LIMIT 1"),
-            [note_id],
-            map_reminder,
-        )
-        .optional()
-        .map_err(AppError::from)
-}
-
 /// Request codes of everything still armed for a reminder.
 fn armed_codes(transaction: &Transaction<'_>, reminder_id: ReminderId) -> AppResult<Vec<i32>> {
     let mut statement = transaction
