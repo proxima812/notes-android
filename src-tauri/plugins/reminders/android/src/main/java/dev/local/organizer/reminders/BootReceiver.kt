@@ -15,6 +15,9 @@ import android.util.Log
  *
  * `BOOT_COMPLETED` arrives only after the user unlocks, which is what makes
  * reading [AlarmStore] from ordinary (credential-encrypted) storage safe here.
+ *
+ * The decision about what is still worth showing lives in [RestorePlanner];
+ * this only carries it out.
  */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -29,30 +32,20 @@ class BootReceiver : BroadcastReceiver() {
         var dropped = 0
 
         for (alarm in AlarmStore.all(context)) {
-            val lateBy = now - alarm.triggerAtMillis
-            val alarmToArm = when {
-                lateBy <= 0L -> alarm
-                // The phone was off when this was due. Firing it a moment after
-                // the user turns the phone back on is what they asked for, just
-                // late; saying nothing at all is the one outcome a reminder
-                // must never have.
-                lateBy <= MISSED_GRACE_MILLIS -> alarm.copy(triggerAtMillis = now + CATCH_UP_DELAY_MILLIS)
-                // Too stale to be a reminder any more — after a week off, a
-                // notification for last Tuesday is noise, not a service.
-                else -> {
+            when (val plan = RestorePlanner.plan(alarm, now)) {
+                is RestorePlan.Drop -> {
                     AlarmStore.forget(context, alarm.requestCode)
                     dropped++
-                    continue
                 }
-            }
 
-            try {
-                AlarmScheduler.schedule(context, alarmToArm)
-                if (lateBy > 0L) missed++ else restored++
-            } catch (failure: Exception) {
-                // One reminder that cannot be re-armed — a sound removed by an
-                // update, say — must not cost the user all the others.
-                Log.w(TAG, "не удалось восстановить будильник ${alarm.requestCode}", failure)
+                is RestorePlan.Arm -> try {
+                    AlarmScheduler.schedule(context, plan.alarm)
+                    if (plan.wasMissed) missed++ else restored++
+                } catch (failure: Exception) {
+                    // One reminder that cannot be re-armed — a sound removed by
+                    // an update, say — must not cost the user all the others.
+                    Log.w(TAG, "не удалось восстановить будильник ${alarm.requestCode}", failure)
+                }
             }
         }
 
@@ -61,11 +54,5 @@ class BootReceiver : BroadcastReceiver() {
 
     private companion object {
         const val TAG = "Organizer"
-
-        /** How late a missed reminder may be and still be worth showing. */
-        const val MISSED_GRACE_MILLIS = 24L * 60L * 60L * 1000L
-
-        /** Long enough for the launcher to settle before the shade lights up. */
-        const val CATCH_UP_DELAY_MILLIS = 10_000L
     }
 }
