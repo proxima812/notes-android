@@ -77,6 +77,7 @@ pub fn run() {
             application::commands::reminders_upsert_for_note,
             application::commands::reminders_delete_for_note,
             application::commands::reminders_take_launch_target,
+            application::commands::reminders_reconcile_zone,
             application::commands::reminder_sounds_list,
             application::commands::reminder_time_presets_list,
             application::commands::reminder_time_presets_save,

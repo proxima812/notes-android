@@ -27,6 +27,17 @@ pub trait ReminderRepository: Send + Sync {
         cancel: &mut dyn FnMut(&ScheduledReminder) -> AppResult<()>,
     ) -> AppResult<Option<ScheduledReminder>>;
 
+    /// Moves an occurrence to another instant, recording the zone it now means.
+    ///
+    /// Used when the device has changed zone: the wall-clock time the user
+    /// asked for stays, and the instant that renders it moves.
+    fn retime(
+        &self,
+        scheduled: &ScheduledReminder,
+        at: Timestamp,
+        zone: &str,
+    ) -> AppResult<ScheduledReminder>;
+
     /// Every reminder that is still due, across all notes.
     ///
     /// Restoring a backup replaces the whole set, so re-arming has to start

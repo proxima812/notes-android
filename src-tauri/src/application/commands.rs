@@ -192,6 +192,19 @@ pub async fn reminders_take_launch_target(
     Ok(blocking(move || reminders.take_launch_target()).await)
 }
 
+/// Re-renders pending reminders in the zone the device is in now.
+///
+/// Asked on every start: nothing notifies an app that it has changed country,
+/// and a reminder that means 09:00 has to keep meaning 09:00.
+#[tauri::command]
+pub async fn reminders_reconcile_zone(
+    state: State<'_, AppState>,
+    timezone: String,
+) -> Result<CommandResult<u32>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.reconcile_zone(&timezone)).await)
+}
+
 #[tauri::command]
 pub async fn reminder_sounds_list(
     state: State<'_, AppState>,

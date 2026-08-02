@@ -1,7 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Languages, Settings } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
+import { reconcileReminderZone } from "@/features/reminders/api";
 import { useReminderLaunchTarget } from "@/features/reminders/useReminderLaunchTarget";
 import { LanguagePicker } from "@/features/settings/ui/LanguagePicker";
 import { SettingsPage } from "@/features/settings/ui/SettingsPage";
@@ -32,6 +33,17 @@ function Shell(): React.JSX.Element {
   const [route, setRoute] = useState<Route>({ kind: "library" });
   const [languageOpen, setLanguageOpen] = useState(false);
   const t = useT();
+
+  // A reminder means a time on a clock, so crossing a border has to move the
+  // instant rather than the time. Nothing announces that the device changed
+  // zone, so the question is asked once per start and is usually answered
+  // "nothing moved".
+  useEffect(() => {
+    void reconcileReminderZone().catch(() => {
+      // The app must still open. A reminder left in yesterday's zone is worth
+      // less than a start screen that refuses to appear.
+    });
+  }, []);
 
   // A tapped reminder overrides whatever was on screen, including a note the
   // user had left open: they asked for this note, just now, by tapping it.

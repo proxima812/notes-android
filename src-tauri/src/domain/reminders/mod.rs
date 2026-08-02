@@ -3,6 +3,7 @@
 
 pub mod repository;
 pub mod time_presets;
+pub mod zones;
 
 use crate::domain::clock::Timestamp;
 use crate::domain::ids::{NoteId, ReminderId, ReminderOccurrenceId};
@@ -10,6 +11,7 @@ use crate::error::{AppError, AppResult, ValidationError};
 
 pub use repository::ReminderRepository;
 pub use time_presets::{TimePreset, TIME_PRESETS_SETTING_KEY};
+pub use zones::{parse_zone, reinterpret, resolve};
 
 pub const DEFAULT_SOUND_SETTING_KEY: &str = "reminders.default_sound";
 pub const FALLBACK_SOUND_ID: &str = "death_and_rebirth";

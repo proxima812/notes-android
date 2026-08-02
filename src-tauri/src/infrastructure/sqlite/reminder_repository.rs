@@ -278,6 +278,34 @@ impl ReminderRepository for SqliteReminderRepository {
         })
     }
 
+    fn retime(
+        &self,
+        scheduled: &ScheduledReminder,
+        at: Timestamp,
+        zone: &str,
+    ) -> AppResult<ScheduledReminder> {
+        let now = self.clock.now();
+        self.database.in_transaction(|transaction| {
+            transaction
+                .execute(
+                    "UPDATE reminders
+                        SET scheduled_at = ?1, timezone = ?2, updated_at = ?3
+                      WHERE id = ?4",
+                    params![at.as_millis(), zone, now.as_millis(), scheduled.reminder.id,],
+                )
+                .map_err(AppError::from)?;
+            transaction
+                .execute(
+                    "UPDATE reminder_occurrences
+                        SET occurrence_at = ?1, updated_at = ?2
+                      WHERE id = ?3",
+                    params![at.as_millis(), now.as_millis(), scheduled.occurrence.id],
+                )
+                .map_err(AppError::from)?;
+            fetch_current(transaction, scheduled.reminder.id)
+        })
+    }
+
     fn active_scheduled(&self, now: Timestamp) -> AppResult<Vec<ScheduledReminder>> {
         self.database.with_connection(|connection| {
             let mut statement = connection

@@ -351,6 +351,15 @@ mod tests {
             Ok(None)
         }
 
+        fn retime(
+            &self,
+            _scheduled: &ScheduledReminder,
+            _at: Timestamp,
+            _zone: &str,
+        ) -> AppResult<ScheduledReminder> {
+            unreachable!("not used by backup")
+        }
+
         fn active_scheduled(&self, _now: Timestamp) -> AppResult<Vec<ScheduledReminder>> {
             Ok(self.active.lock().clone())
         }

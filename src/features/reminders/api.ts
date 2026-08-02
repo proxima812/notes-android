@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { callCommand } from "@/shared/api/command";
 import {
+  deviceTimeZone,
   noteId,
   reminderId,
   reminderOccurrenceId,
@@ -111,6 +112,18 @@ export async function takeReminderLaunchTarget(): Promise<NoteId | null> {
     "reminders_take_launch_target",
     brandedNoteId.nullable(),
   );
+}
+
+/**
+ * Re-renders pending reminders in the zone the device is in now.
+ *
+ * Nothing tells an app that it has changed country, so this is asked on every
+ * start. It answers how many reminders moved, which is zero almost always.
+ */
+export async function reconcileReminderZone(): Promise<number> {
+  return callCommand("reminders_reconcile_zone", z.number().int(), {
+    timezone: deviceTimeZone(),
+  });
 }
 
 export async function listReminderSounds(): Promise<ReminderSoundCatalog> {

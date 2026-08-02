@@ -12,8 +12,8 @@ use crate::domain::notes::{
     validate_content, validate_title, Note, NoteRepository, Page, PageRequest,
 };
 use crate::domain::reminders::{
-    resolve_sound, sound_presets, time_presets, ReminderDraft, ReminderRepository,
-    ScheduledReminder, SoundPreset, FALLBACK_SOUND_ID,
+    parse_zone, reinterpret, resolve_sound, sound_presets, time_presets, ReminderDraft,
+    ReminderRepository, ScheduledReminder, SoundPreset, FALLBACK_SOUND_ID,
 };
 use crate::domain::search::{SearchHit, SearchRepository};
 use crate::error::{AppError, AppResult, NotificationError, ValidationError};
@@ -270,6 +270,56 @@ impl ReminderUseCases {
             .map(|id| id.to_string()))
     }
 
+    /// Re-renders every pending reminder in the zone the device is in now.
+    ///
+    /// A reminder is a time on a clock, not an instant: someone who asked to be
+    /// woken at 09:00 and then crossed two zones still means 09:00. Nothing
+    /// tells the app it has moved, so this is asked on every start and is a
+    /// no-op whenever it has not.
+    ///
+    /// Reminders whose stored zone this build cannot parse are left alone
+    /// rather than guessed at — moving one to the wrong instant would be worse
+    /// than leaving it where the user last saw it.
+    ///
+    /// # Errors
+    /// Fails when the device zone is unknown or on a storage error. A single
+    /// reminder that cannot be re-armed is logged and skipped.
+    pub fn reconcile_zone(&self, device_zone: &str) -> AppResult<u32> {
+        let target = parse_zone(device_zone)?;
+        let configured_default = self.reminders.default_sound_id()?;
+        let mut moved = 0;
+
+        for scheduled in self.reminders.active_scheduled(self.clock.now())? {
+            if scheduled.reminder.timezone == device_zone {
+                continue;
+            }
+            let Ok(origin) = parse_zone(&scheduled.reminder.timezone) else {
+                tracing::warn!("a reminder carries a zone this build does not know");
+                continue;
+            };
+
+            let at = reinterpret(scheduled.occurrence.occurrence_at, origin, target)?;
+            let updated = self.reminders.retime(&scheduled, at, device_zone)?;
+
+            let Ok(sound) = resolve_sound(&updated.reminder.sound, configured_default.as_deref())
+            else {
+                tracing::warn!("a moved reminder names a sound this build does not have");
+                continue;
+            };
+            // Re-arming replaces the alarm under the same request code, so the
+            // old instant is not left behind to fire as well.
+            match self.alarms.schedule(&alarm_from(&updated, sound)) {
+                Ok(_) => moved += 1,
+                Err(error) => tracing::warn!(%error, "a moved reminder could not be re-armed"),
+            }
+        }
+
+        if moved > 0 {
+            tracing::info!(moved, "reminders re-rendered in the device zone");
+        }
+        Ok(moved)
+    }
+
     /// Returns sound choices and the concrete global default.
     ///
     /// # Errors
@@ -507,6 +557,82 @@ mod tests {
             timezone: "Asia/Almaty".into(),
             sound: "default".into(),
         }
+    }
+
+    #[test]
+    fn changing_country_keeps_the_time_on_the_clock() {
+        let fixture = reminder_fixture(true, true);
+        // 09:00 in Almaty, a long way in the future so it stays pending.
+        let almaty_nine = crate::domain::reminders::resolve(
+            chrono::NaiveDate::from_ymd_opt(2030, 8, 3)
+                .expect("date")
+                .and_hms_opt(9, 0, 0)
+                .expect("time"),
+            chrono_tz::Asia::Almaty,
+        );
+        fixture
+            .reminders
+            .upsert_for_note(UpsertReminderRequest {
+                scheduled_at: almaty_nine.as_millis(),
+                ..valid_reminder_request(fixture.note_id)
+            })
+            .expect("saves");
+
+        let moved = fixture
+            .reminders
+            .reconcile_zone("Europe/Moscow")
+            .expect("reconciles");
+
+        assert_eq!(moved, 1);
+        let view = fixture
+            .reminders
+            .get_for_note(&fixture.note_id.to_string())
+            .expect("reads")
+            .expect("still there");
+        let local = view
+            .scheduled
+            .occurrence
+            .occurrence_at
+            .to_zoned(chrono_tz::Europe::Moscow)
+            .expect("representable");
+        assert_eq!(
+            local.format("%H:%M").to_string(),
+            "09:00",
+            "the reminder means nine in the morning wherever the user is"
+        );
+        assert_eq!(view.scheduled.reminder.timezone, "Europe/Moscow");
+    }
+
+    #[test]
+    fn staying_in_the_same_zone_moves_nothing() {
+        let fixture = reminder_fixture(true, true);
+        fixture
+            .reminders
+            .upsert_for_note(valid_reminder_request(fixture.note_id))
+            .expect("saves");
+        let armed = fixture.alarms.scheduled.lock().len();
+
+        let moved = fixture
+            .reminders
+            .reconcile_zone("Asia/Almaty")
+            .expect("reconciles");
+
+        assert_eq!(moved, 0);
+        assert_eq!(
+            fixture.alarms.scheduled.lock().len(),
+            armed,
+            "an app opened at home must not re-arm anything"
+        );
+    }
+
+    #[test]
+    fn an_unknown_device_zone_is_refused_rather_than_guessed() {
+        let fixture = reminder_fixture(true, true);
+        let error = fixture
+            .reminders
+            .reconcile_zone("Mars/Olympus")
+            .expect_err("must refuse");
+        assert_eq!(error.code(), "validation_unknown_timezone");
     }
 
     fn fixture() -> Fixture {
