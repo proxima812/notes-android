@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- `viewport-fit=cover` is what makes `env(safe-area-inset-*)` resolve to
+         anything but zero. From Android 15 an app targeting SDK 35+ is drawn
+         edge to edge whether it asks to be or not, so without this the header
+         sits under the status bar and the clock covers the wordmark. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- The two subsets almost every session needs. They are found only after the
          CSS parses otherwise, which costs the first screen a frame of fallback
          text; the other six subsets stay on demand. -->
