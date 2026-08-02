@@ -17,8 +17,10 @@ use crate::state::AppState;
 
 use super::dto::{
     CommandResult, CreateNoteRequest, ListNotesRequest, NoteDto, NoteSummaryDto, PageDto,
-    SearchHitDto, SearchRequest, UpdateNoteRequest,
+    ReminderDto, ReminderSoundCatalogDto, SearchHitDto, SearchRequest, UpdateNoteRequest,
+    UpsertReminderRequest,
 };
+use super::use_cases::move_note_to_trash;
 
 /// Runs blocking work on the pool and folds a panic or a join failure into a
 /// normal error, so a bug in one command cannot take the whole app down.
@@ -114,7 +116,8 @@ pub async fn notes_list(
 #[tauri::command]
 pub async fn notes_trash(state: State<'_, AppState>, id: String) -> Result<CommandResult<()>, ()> {
     let notes = Arc::clone(&state.notes);
-    Ok(blocking(move || notes.move_to_trash(&id)).await)
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || move_note_to_trash(&notes, &reminders, &id)).await)
 }
 
 #[tauri::command]
@@ -145,6 +148,56 @@ pub async fn notes_duplicate(
 ) -> Result<CommandResult<NoteDto>, ()> {
     let notes = Arc::clone(&state.notes);
     Ok(blocking(move || notes.duplicate(&id).map(NoteDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn reminders_get_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<Option<ReminderDto>>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || {
+        reminders
+            .get_for_note(&note_id)
+            .map(|value| value.map(ReminderDto::from))
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn reminders_upsert_for_note(
+    state: State<'_, AppState>,
+    request: UpsertReminderRequest,
+) -> Result<CommandResult<ReminderDto>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.upsert_for_note(request).map(ReminderDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn reminders_delete_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<()>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.delete_for_note(&note_id).map(|_| ())).await)
+}
+
+/// Note a notification tap asked to open, or nothing if the app was opened the
+/// usual way. Answering clears it, so asking again returns nothing.
+#[tauri::command]
+pub async fn reminders_take_launch_target(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<Option<String>>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.take_launch_target()).await)
+}
+
+#[tauri::command]
+pub async fn reminder_sounds_list(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<ReminderSoundCatalogDto>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.sound_catalog().map(ReminderSoundCatalogDto::from)).await)
 }
 
 #[tauri::command]

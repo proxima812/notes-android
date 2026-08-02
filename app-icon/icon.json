@@ -1,0 +1,8 @@
+{
+  "default": "xima-composite.png",
+  "bg_color": "#050109",
+  "android_bg": "xima-background.png",
+  "android_fg": "xima-foreground.png",
+  "android_fg_scale": 100,
+  "android_monochrome": "xima-monochrome.png"
+}

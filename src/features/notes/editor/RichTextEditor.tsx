@@ -1,8 +1,37 @@
+import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
+import { mergeAttributes } from "@tiptap/react";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 
+import { useT } from "@/shared/i18n";
+
 import { FormatToolbar } from "./FormatToolbar";
+import { siteOf } from "./linkSites";
+import { SelectionMenu } from "./SelectionMenu";
+
+/**
+ * The link mark, tagged with the service it points at.
+ *
+ * `data-site` is computed while rendering rather than stored as an attribute:
+ * the icon is a presentation detail, and baking it into `content_json` would
+ * freeze today's mapping into every note ever saved.
+ *
+ * The icon is drawn by CSS as a `::before`, not as a DOM child, because anything
+ * inside the anchor would be editable content the caret could land in.
+ */
+const LinkWithIcon = Link.extend({
+  renderHTML({ HTMLAttributes }) {
+    const site = siteOf(HTMLAttributes["href"]);
+    return [
+      "a",
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+        ...(site === null ? {} : { "data-site": site }),
+      }),
+      0,
+    ];
+  },
+});
 
 export interface EditorSnapshot {
   /** Tiptap document, serialised. Stored verbatim in `notes.content_json`. */
@@ -50,15 +79,28 @@ export function RichTextEditor({
   initialText,
   onChange,
 }: RichTextEditorProps): React.JSX.Element {
+  const t = useT();
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         // Only the two levels the toolbar offers; a phone screen has no room
         // for a six-level hierarchy and H1 competes with the note title.
         heading: { levels: [2, 3] },
+        // Replaced below by the variant that tags the service.
         link: false,
       }),
-      Placeholder.configure({ placeholder: "Текст заметки…" }),
+      LinkWithIcon.configure({
+        // `autolink` formats a URL as it is typed, `linkOnPaste` catches the far
+        // more common case on a phone: pasting one in from another app.
+        autolink: true,
+        linkOnPaste: true,
+        defaultProtocol: "https",
+        // Tapping must not navigate: this WebView *is* the app, and following a
+        // link inside it would replace the note with a web page and no way back.
+        openOnClick: false,
+        protocols: ["http", "https", "mailto", "tel"],
+      }),
+      Placeholder.configure({ placeholder: t("editor.bodyPlaceholder") }),
     ],
     content: initialContent(initialJson, initialText),
     editorProps: {
@@ -77,10 +119,11 @@ export function RichTextEditor({
 
   return (
     <div className="flex flex-1 flex-col gap-3">
-      <EditorContent editor={editor} className="flex-1" />
-      <div className="sticky bottom-0 pb-1">
+      <div className="sticky top-0 z-10 pt-1">
         <FormatToolbar editor={editor} />
       </div>
+      <SelectionMenu editor={editor} />
+      <EditorContent editor={editor} className="flex-1" />
     </div>
   );
 }

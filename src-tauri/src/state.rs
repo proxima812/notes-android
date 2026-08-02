@@ -7,16 +7,20 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::application::use_cases::{NoteUseCases, SearchUseCases};
+use crate::application::use_cases::{NoteUseCases, ReminderUseCases, SearchUseCases};
 use crate::domain::clock::{SharedClock, SystemClock};
 use crate::error::AppResult;
-use crate::infrastructure::sqlite::{Database, SqliteNoteRepository, SqliteSearchRepository};
+use crate::infrastructure::sqlite::{
+    Database, SqliteNoteRepository, SqliteReminderRepository, SqliteSearchRepository,
+};
+use crate::platform::AlarmClock;
 
 /// File name of the database inside the app's private directory.
 pub const DATABASE_FILE: &str = "organizer.sqlite";
 
 pub struct AppState {
     pub notes: Arc<NoteUseCases>,
+    pub reminders: Arc<ReminderUseCases>,
     pub search: Arc<SearchUseCases>,
     pub database: Arc<Database>,
     pub clock: SharedClock,
@@ -27,16 +31,20 @@ impl AppState {
     ///
     /// # Errors
     /// Fails when the database cannot be opened or migrated.
-    pub fn bootstrap(data_dir: &Path) -> AppResult<Self> {
+    pub fn bootstrap(data_dir: &Path, alarms: Arc<dyn AlarmClock>) -> AppResult<Self> {
         let clock: SharedClock = Arc::new(SystemClock);
-        Self::with_clock(data_dir, clock)
+        Self::with_services(data_dir, clock, alarms)
     }
 
-    /// Same as [`Self::bootstrap`] but with an injected clock, for tests.
+    /// Same as [`Self::bootstrap`] but with injected platform services, for tests.
     ///
     /// # Errors
     /// Fails when the database cannot be opened or migrated.
-    pub fn with_clock(data_dir: &Path, clock: SharedClock) -> AppResult<Self> {
+    pub fn with_services(
+        data_dir: &Path,
+        clock: SharedClock,
+        alarms: Arc<dyn AlarmClock>,
+    ) -> AppResult<Self> {
         let path = data_dir.join(DATABASE_FILE);
         tracing::info!("opening the local database");
 
@@ -50,9 +58,18 @@ impl AppState {
             Arc::clone(&database),
             Arc::clone(&clock),
         ));
+        let reminder_repository = Arc::new(SqliteReminderRepository::new(
+            Arc::clone(&database),
+            Arc::clone(&clock),
+        ));
 
         Ok(Self {
             notes: Arc::new(NoteUseCases::new(note_repository)),
+            reminders: Arc::new(ReminderUseCases::new(
+                reminder_repository,
+                alarms,
+                Arc::clone(&clock),
+            )),
             search: Arc::new(SearchUseCases::new(search_repository)),
             database,
             clock,
@@ -66,6 +83,50 @@ mod tests {
     use crate::application::dto::ListNotesRequest;
     use crate::domain::clock::{FixedClock, Timestamp};
     use crate::domain::notes::NoteDraft;
+    use crate::platform::{Alarm, AlarmClock, AlarmPermissions};
+
+    struct FakeAlarmClock;
+
+    impl AlarmClock for FakeAlarmClock {
+        fn schedule(&self, _alarm: &Alarm) -> AppResult<bool> {
+            Ok(true)
+        }
+
+        fn cancel(&self, _request_code: i32) -> AppResult<()> {
+            Ok(())
+        }
+
+        fn take_launch_target(&self) -> AppResult<Option<String>> {
+            Ok(None)
+        }
+
+        fn permissions(&self) -> AppResult<AlarmPermissions> {
+            Ok(AlarmPermissions {
+                notifications_granted: true,
+                exact_allowed: true,
+            })
+        }
+
+        fn request_notification_permission(&self) -> AppResult<bool> {
+            Ok(true)
+        }
+    }
+
+    fn fake_alarms() -> Arc<dyn AlarmClock> {
+        Arc::new(FakeAlarmClock)
+    }
+
+    #[test]
+    fn bootstrapping_wires_the_reminder_catalog() {
+        let directory = tempfile::tempdir().expect("temp dir");
+        let clock: SharedClock = Arc::new(FixedClock::new(Timestamp::from_millis(1_000)));
+
+        let state = AppState::with_services(directory.path(), clock, fake_alarms())
+            .expect("bootstraps reminders");
+
+        let catalog = state.reminders.sound_catalog().expect("reads catalog");
+        assert_eq!(catalog.default_sound_id, "death_and_rebirth");
+    }
 
     #[test]
     fn bootstrapping_creates_a_usable_database_in_the_given_directory() {
@@ -73,7 +134,8 @@ mod tests {
         let clock: SharedClock =
             Arc::new(FixedClock::new(Timestamp::from_millis(1_700_000_000_000)));
 
-        let state = AppState::with_clock(directory.path(), clock).expect("bootstraps");
+        let state =
+            AppState::with_services(directory.path(), clock, fake_alarms()).expect("bootstraps");
         assert!(directory.path().join(DATABASE_FILE).exists());
 
         state
@@ -100,7 +162,8 @@ mod tests {
 
         {
             let state =
-                AppState::with_clock(directory.path(), Arc::clone(&clock)).expect("bootstraps");
+                AppState::with_services(directory.path(), Arc::clone(&clock), fake_alarms())
+                    .expect("bootstraps");
             state
                 .notes
                 .create(NoteDraft {
@@ -110,7 +173,8 @@ mod tests {
                 .expect("creates");
         }
 
-        let restarted = AppState::with_clock(directory.path(), clock).expect("bootstraps again");
+        let restarted = AppState::with_services(directory.path(), clock, fake_alarms())
+            .expect("bootstraps again");
         let page = restarted
             .notes
             .list(&ListNotesRequest::default())

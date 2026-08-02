@@ -1,8 +1,15 @@
 @import "tailwindcss";
+@import "./fonts.css";
+@import "./linkIcons.css";
 
-/* Dark mode is driven by a `data-theme` attribute on <html> so that the app can
-   offer light / dark / OLED independently of the OS preference. */
-@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="oled"], [data-theme="oled"] *));
+/* Themes.
+   One axis, not two: every theme sets the whole palette, so the picker is a flat
+   list of six rather than a base-times-accent matrix the UI would have to
+   explain. `:root` carries the default (Мята) so nothing is unstyled before the
+   attribute lands.
+
+   `--app-brand` is a gradient, so it is a plain custom property rather than a
+   `@theme` colour, and is spent via `bg-[image:var(--app-brand)]`. */
 
 @theme {
   --color-surface: var(--app-surface);
@@ -20,42 +27,189 @@
   --animate-duration-base: 180ms;
 }
 
+/* Shared dark base for the four coloured themes. Each of those then overrides
+   only its accent, which is why they cannot drift apart on contrast. */
 :root,
-[data-theme="light"] {
-  --app-surface: oklch(99% 0.002 250);
-  --app-surface-raised: oklch(100% 0 0);
-  --app-surface-sunken: oklch(96% 0.004 250);
-  --app-border-subtle: oklch(90% 0.006 250);
-  --app-content: oklch(22% 0.012 250);
-  --app-content-muted: oklch(52% 0.014 250);
-  --app-accent: oklch(58% 0.16 255);
-  --app-accent-content: oklch(99% 0 0);
-  --app-danger: oklch(56% 0.19 25);
-}
-
-[data-theme="dark"] {
+[data-theme="mint"],
+[data-theme="indigo"],
+[data-theme="amethyst"],
+[data-theme="amber"] {
   --app-surface: oklch(21% 0.011 255);
   --app-surface-raised: oklch(25% 0.012 255);
   --app-surface-sunken: oklch(17% 0.010 255);
   --app-border-subtle: oklch(32% 0.013 255);
   --app-content: oklch(95% 0.005 255);
   --app-content-muted: oklch(70% 0.011 255);
-  --app-accent: oklch(72% 0.13 255);
-  --app-accent-content: oklch(18% 0.02 255);
   --app-danger: oklch(68% 0.16 25);
+  /* Links keep their own blue in every theme — it is the one colour readers
+     already know means "this is a link", so it does not follow the accent. */
+  --app-link: oklch(76% 0.13 240);
 }
 
-/* True black for the Pixel 8a OLED panel. */
-[data-theme="oled"] {
+/* Mint is the default: it is the launcher icon's own colour, so the first screen
+   after tapping the icon is not a different colour than the icon. */
+:root,
+[data-theme="mint"] {
+  --app-accent: oklch(85% 0.165 163);
+  --app-accent-content: oklch(20% 0.04 163);
+  --app-brand: linear-gradient(135deg, oklch(92% 0.121 168) 0%, oklch(81% 0.191 158) 100%);
+  --app-glow: oklch(72% 0.17 163);
+}
+
+[data-theme="indigo"] {
+  --app-accent: oklch(72% 0.13 255);
+  --app-accent-content: oklch(18% 0.02 255);
+  --app-brand: linear-gradient(135deg, oklch(74% 0.16 248) 0%, oklch(62% 0.19 285) 100%);
+  --app-glow: oklch(60% 0.16 262);
+}
+
+[data-theme="amethyst"] {
+  --app-accent: oklch(71% 0.16 302);
+  --app-accent-content: oklch(19% 0.03 302);
+  --app-brand: linear-gradient(135deg, oklch(75% 0.17 308) 0%, oklch(64% 0.17 272) 100%);
+  --app-glow: oklch(58% 0.18 298);
+}
+
+[data-theme="amber"] {
+  --app-accent: oklch(84% 0.15 92);
+  --app-accent-content: oklch(22% 0.04 92);
+  --app-brand: linear-gradient(135deg, oklch(88% 0.14 98) 0%, oklch(76% 0.16 58) 100%);
+  --app-glow: oklch(72% 0.15 82);
+}
+
+/* Обсидиан — true black, Vercel-style: the accent is the foreground itself and
+   colour is spent only on state, which is also what suits the OLED panel. */
+[data-theme="obsidian"] {
   --app-surface: oklch(0% 0 0);
-  --app-surface-raised: oklch(13% 0.006 255);
+  --app-surface-raised: oklch(14% 0 90);
   --app-surface-sunken: oklch(0% 0 0);
-  --app-border-subtle: oklch(26% 0.010 255);
-  --app-content: oklch(96% 0.004 255);
-  --app-content-muted: oklch(68% 0.011 255);
-  --app-accent: oklch(74% 0.13 255);
-  --app-accent-content: oklch(10% 0.02 255);
-  --app-danger: oklch(70% 0.16 25);
+  --app-border-subtle: oklch(30% 0 90);
+  --app-content: oklch(95% 0 90);
+  --app-content-muted: oklch(71% 0 90);
+  --app-accent: oklch(95% 0 90);
+  --app-accent-content: oklch(0% 0 0);
+  --app-danger: oklch(70% 0.19 21);
+  --app-link: oklch(76% 0.13 240);
+  --app-brand: linear-gradient(135deg, oklch(100% 0 0) 0%, oklch(60% 0 90) 100%);
+  --app-glow: oklch(60% 0 90);
+}
+
+/* Фарфор — the only light theme, shadcn-style zinc. */
+[data-theme="porcelain"] {
+  --app-surface: oklch(100% 0 90);
+  --app-surface-raised: oklch(100% 0 90);
+  --app-surface-sunken: oklch(97% 0.001 286);
+  --app-border-subtle: oklch(92% 0.004 286);
+  --app-content: oklch(14% 0.004 286);
+  --app-content-muted: oklch(55% 0.014 286);
+  --app-accent: oklch(21% 0.006 286);
+  --app-accent-content: oklch(99% 0 90);
+  --app-danger: oklch(58% 0.215 27);
+  /* Darker, because this blue is read on white. */
+  --app-link: oklch(52% 0.19 253);
+  --app-brand: linear-gradient(135deg, oklch(21% 0.006 286) 0%, oklch(44% 0.015 286) 100%);
+  --app-glow: oklch(70% 0.02 286);
+}
+
+/* Note colours.
+
+   A preset carries only two hues; the theme decides how light and how saturated
+   a coloured note is and what ink goes on it. That split is the whole point: one
+   fixed set of colours cannot be a dark slab on the white theme, a soft tint on
+   the dark ones and not a glowing block on true black.
+
+   Presets are the identifiers stored in `notes.color` (see `gradients.ts`).
+   `--note-c-scale` exists for Графит, which is the same construction with the
+   colour taken almost all the way out. */
+
+[data-note="sunset"] {
+  --note-h1: 45;
+  --note-h2: 12;
+}
+[data-note="ocean"] {
+  --note-h1: 235;
+  --note-h2: 195;
+}
+[data-note="forest"] {
+  --note-h1: 155;
+  --note-h2: 185;
+}
+[data-note="lavender"] {
+  --note-h1: 300;
+  --note-h2: 265;
+}
+[data-note="rose"] {
+  --note-h1: 350;
+  --note-h2: 320;
+}
+[data-note="amber"] {
+  --note-h1: 80;
+  --note-h2: 50;
+}
+[data-note="mint"] {
+  --note-h1: 175;
+  --note-h2: 210;
+}
+[data-note="graphite"] {
+  --note-h1: 255;
+  --note-h2: 255;
+  --note-c-scale: 0.18;
+}
+
+.note-surface {
+  /* The dark themes: a muted block, a touch lighter than the raised surface. */
+  --note-c-scale: 1;
+  --note-l1: 36%;
+  --note-l2: 31%;
+  --note-c1: 0.078;
+  --note-c2: 0.072;
+  --note-lb: 46%;
+  --note-cb: 0.072;
+  --note-ink: oklch(97% 0.004 255);
+  --note-ink-muted: oklch(97% 0.004 255 / 0.72);
+  --note-link: oklch(83% 0.11 240);
+
+  background-image: linear-gradient(
+    135deg,
+    oklch(var(--note-l1) calc(var(--note-c1) * var(--note-c-scale)) var(--note-h1)) 0%,
+    oklch(var(--note-l2) calc(var(--note-c2) * var(--note-c-scale)) var(--note-h2)) 100%
+  );
+  border-color: oklch(var(--note-lb) calc(var(--note-cb) * var(--note-c-scale)) var(--note-h1));
+  color: var(--note-ink);
+  /* Links inside a coloured note answer to the note, not to the app surface. */
+  --app-link: var(--note-link);
+}
+
+/* Обсидиан sits on true black, where the dark-theme block reads as a lit panel.
+   Same colours, pulled down and desaturated until the card is a shape rather
+   than a light source. */
+[data-theme="obsidian"] .note-surface {
+  --note-l1: 25%;
+  --note-l2: 19%;
+  --note-c1: 0.055;
+  --note-c2: 0.050;
+  --note-lb: 34%;
+  --note-cb: 0.045;
+}
+
+/* Фарфор inverts it: on white, a dark card is a hole in the page. The colour
+   becomes a tint and the ink goes dark, carrying a little of the note's own hue
+   so the card still reads as coloured rather than as grey text on pastel. */
+[data-theme="porcelain"] .note-surface {
+  --note-l1: 96%;
+  --note-l2: 92.5%;
+  --note-c1: 0.042;
+  --note-c2: 0.050;
+  --note-lb: 87%;
+  --note-cb: 0.055;
+  --note-ink: oklch(26% 0.045 var(--note-h1));
+  --note-ink-muted: oklch(45% 0.038 var(--note-h1));
+  --note-link: oklch(48% 0.19 253);
+}
+
+/* Secondary text on a coloured note. */
+.note-surface .note-ink-muted {
+  color: var(--note-ink-muted);
 }
 
 @layer base {
@@ -72,15 +226,26 @@
     overscroll-behavior: none;
     background-color: var(--app-surface);
     color: var(--app-content);
-    font-family:
-      "Inter", "Roboto", ui-sans-serif, system-ui, -apple-system, sans-serif;
-    font-synthesis-weight: none;
+    /* Rubik carries every weight and a real italic; the tail is what renders
+       Chinese, which Rubik has no glyphs for. */
+    font-family: "Rubik", "Noto Sans SC", "Roboto", ui-sans-serif, system-ui, sans-serif;
+    /* Nothing is faked: a weight or a slant the family does not have must look
+       wrong rather than be smeared by the rasteriser. */
+    font-synthesis: none;
     text-rendering: optimizeLegibility;
   }
 
-  /* Respect the Android gesture bar / status bar. */
+  /* Respect the Android gesture bar / status bar.
+     `min-height` is the viewport minus the insets, not the full viewport: the
+     insets are padding on this same box, so claiming 100dvh here would make the
+     page taller than the screen by exactly the inset height and leave every
+     screen scrollable by a few pixels with nothing to scroll to. The column
+     layout lets the page own the leftover space instead of a child guessing at
+     it with its own `min-h-dvh`. */
   #root {
-    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
   }
@@ -133,6 +298,40 @@
 
   .note-body li + li {
     margin-top: 0.25rem;
+  }
+
+  /* The rule is `currentColor` at low alpha rather than a palette colour: a
+     coloured note paints its own gradient behind the text, and a fixed border
+     tuned for the app surface disappears on half of them. */
+  .note-body blockquote {
+    padding-inline-start: 0.875rem;
+    border-inline-start: 3px solid color-mix(in oklab, currentColor 35%, transparent);
+    font-style: italic;
+  }
+
+  .note-body a[href] {
+    color: var(--app-link);
+    text-decoration: underline dashed;
+    text-decoration-color: color-mix(in oklab, currentColor 60%, transparent);
+    text-underline-offset: 3px;
+    /* A URL is one long unbreakable word; without this it pushes the note body
+       wider than the screen. */
+    word-break: break-word;
+  }
+
+  .note-body a[data-site]::before {
+    content: "";
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-inline-end: 0.2em;
+    vertical-align: -0.135em;
+    /* The glyph is a mask tinted with the brand colour, so one monochrome path
+       serves as the coloured icon. Marks with no brand colour of their own fall
+       back to the link colour and stay readable on every theme. */
+    background-color: var(--link-icon-color, currentColor);
+    mask: var(--link-icon) center / contain no-repeat;
+    -webkit-mask: var(--link-icon) center / contain no-repeat;
   }
 
   .note-body strong {

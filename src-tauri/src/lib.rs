@@ -8,10 +8,14 @@ pub mod application;
 pub mod domain;
 pub mod error;
 pub mod infrastructure;
+pub mod platform;
 pub mod state;
+
+use std::sync::Arc;
 
 use tauri::Manager as _;
 
+use crate::platform::{AlarmClock, TauriAlarmClock};
 use crate::state::AppState;
 
 /// Installs logging.
@@ -46,7 +50,8 @@ pub fn run() {
             // The database lives in the app's private directory, which Android
             // wipes on uninstall and keeps out of reach of other apps.
             let data_dir = app.path().app_data_dir()?;
-            let state = AppState::bootstrap(&data_dir)?;
+            let alarms: Arc<dyn AlarmClock> = Arc::new(TauriAlarmClock::new(app.handle().clone()));
+            let state = AppState::bootstrap(&data_dir, alarms)?;
             app.manage(state);
             Ok(())
         })
@@ -61,6 +66,11 @@ pub fn run() {
             application::commands::notes_purge,
             application::commands::notes_empty_trash,
             application::commands::notes_duplicate,
+            application::commands::reminders_get_for_note,
+            application::commands::reminders_upsert_for_note,
+            application::commands::reminders_delete_for_note,
+            application::commands::reminders_take_launch_target,
+            application::commands::reminder_sounds_list,
             application::commands::search_run,
             application::commands::search_recent,
             application::commands::search_clear_history,

@@ -11,6 +11,8 @@ use crate::error::AppResult;
 #[derive(Debug, Clone)]
 pub struct Alarm {
     pub occurrence_id: String,
+    /// Note the notification opens when tapped.
+    pub note_id: String,
     /// Stable key the OS uses to replace or cancel this alarm.
     pub request_code: i32,
     pub trigger_at: Timestamp,
@@ -19,6 +21,9 @@ pub struct Alarm {
     /// Whether to ask for an exact alarm. The answer comes back from
     /// [`AlarmClock::schedule`], because the OS is free to refuse.
     pub exact: bool,
+    pub sound_id: String,
+    pub sound_label: String,
+    pub vibrate: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +44,13 @@ pub trait AlarmClock: Send + Sync {
     /// # Errors
     /// Fails when the platform call itself fails.
     fn cancel(&self, request_code: i32) -> AppResult<()>;
+
+    /// Collects the note a notification tap asked to open, clearing it so the
+    /// same tap is not honoured twice.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    fn take_launch_target(&self) -> AppResult<Option<String>>;
 
     /// # Errors
     /// Fails when the platform call itself fails.

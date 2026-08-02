@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 pub struct ScheduleRequest {
     /// Occurrence this alarm belongs to; handed back when the user taps.
     pub occurrence_id: String,
+    /// Note the notification opens, carried so the tap lands on the note rather
+    /// than on whatever screen the app happened to be showing.
+    pub note_id: String,
     /// Stable key `AlarmManager` uses to replace or cancel this alarm.
     pub request_code: i32,
     pub trigger_at_millis: i64,
@@ -18,6 +21,11 @@ pub struct ScheduleRequest {
     /// Request an exact alarm. The OS may refuse, so the response reports what
     /// was actually armed rather than what was asked for.
     pub exact: bool,
+    /// Android raw-resource name selected by the validated Rust catalog.
+    pub sound_id: String,
+    /// Human-readable channel label shown in Android settings.
+    pub sound_label: String,
+    pub vibrate: bool,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -25,6 +33,19 @@ pub struct ScheduleRequest {
 pub struct ScheduleResponse {
     /// False when the alarm had to fall back to an inexact one.
     pub scheduled_exact: bool,
+}
+
+/// The note a notification tap asked to open, if there is one waiting.
+///
+/// Reading it clears it: a tap is a single navigation, and returning it twice
+/// would drag the user back into the note every time they leave it.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LaunchTarget {
+    /// Absent both when the app was opened normally and when the tap has
+    /// already been collected.
+    #[serde(default)]
+    pub note_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -82,3 +103,39 @@ pub struct PermissionRequestResponse {
 #[cfg(mobile)]
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub(crate) struct Empty {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn schedule_request_serializes_the_sound_contract_in_camel_case() {
+        let value = serde_json::to_value(ScheduleRequest {
+            occurrence_id: "occurrence".into(),
+            note_id: "note".into(),
+            request_code: 7,
+            trigger_at_millis: 1_000,
+            title: "Title".into(),
+            body: "Body".into(),
+            exact: true,
+            sound_id: "death_and_rebirth".into(),
+            sound_label: "Death & Rebirth".into(),
+            vibrate: true,
+        })
+        .expect("serializes");
+
+        assert_eq!(value["soundId"], "death_and_rebirth");
+        assert_eq!(value["soundLabel"], "Death & Rebirth");
+        assert_eq!(value["vibrate"], true);
+        assert_eq!(value["noteId"], "note");
+    }
+
+    #[test]
+    fn launch_target_reads_an_object_without_the_key_as_nothing_pending() {
+        // Kotlin's `JSObject.put` drops the key when the value is null, so the
+        // "nothing to open" answer arrives as `{}` rather than as an explicit
+        // null.
+        let target: LaunchTarget = serde_json::from_str("{}").expect("deserializes");
+        assert_eq!(target.note_id, None);
+    }
+}

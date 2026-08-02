@@ -1,0 +1,113 @@
+//! One-shot reminders and the bundled notification-sound catalog.
+
+pub mod repository;
+
+use crate::domain::clock::Timestamp;
+use crate::domain::ids::{NoteId, ReminderId, ReminderOccurrenceId};
+use crate::error::{AppError, AppResult, ValidationError};
+
+pub use repository::ReminderRepository;
+
+pub const DEFAULT_SOUND_SETTING_KEY: &str = "reminders.default_sound";
+pub const FALLBACK_SOUND_ID: &str = "death_and_rebirth";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SoundPreset {
+    pub id: &'static str,
+    pub label: &'static str,
+    pub resource_name: &'static str,
+}
+
+pub const SOUND_PRESETS: &[SoundPreset] = &[SoundPreset {
+    id: "death_and_rebirth",
+    label: "Death & Rebirth",
+    resource_name: "death_and_rebirth",
+}];
+
+#[must_use]
+pub const fn sound_presets() -> &'static [SoundPreset] {
+    SOUND_PRESETS
+}
+
+/// Resolves a stored selection to a concrete bundled preset.
+///
+/// # Errors
+/// Returns a validation error when either the explicit selection or configured
+/// default does not name a preset shipped by this build.
+pub fn resolve_sound(selected: &str, configured_default: Option<&str>) -> AppResult<SoundPreset> {
+    let concrete = if selected == "default" {
+        configured_default.unwrap_or(FALLBACK_SOUND_ID)
+    } else {
+        selected
+    };
+
+    SOUND_PRESETS
+        .iter()
+        .copied()
+        .find(|preset| preset.id == concrete)
+        .ok_or(AppError::Validation(ValidationError::Invalid {
+            field: "sound",
+        }))
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Reminder {
+    pub id: ReminderId,
+    pub note_id: NoteId,
+    pub title: String,
+    pub body: String,
+    pub scheduled_at: Timestamp,
+    pub timezone: String,
+    pub sound: String,
+    pub is_enabled: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReminderOccurrence {
+    pub id: ReminderOccurrenceId,
+    pub reminder_id: ReminderId,
+    pub occurrence_at: Timestamp,
+    pub alarm_request_code: i32,
+    pub is_exact: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScheduledReminder {
+    pub reminder: Reminder,
+    pub occurrence: ReminderOccurrence,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReminderDraft {
+    pub note_id: NoteId,
+    pub title: String,
+    pub body: String,
+    pub scheduled_at: Timestamp,
+    pub timezone: String,
+    pub sound: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn catalog_contains_the_bundled_default() {
+        let preset = resolve_sound("default", None).expect("default resolves");
+        assert_eq!(preset.id, "death_and_rebirth");
+        assert_eq!(preset.resource_name, "death_and_rebirth");
+    }
+
+    #[test]
+    fn unknown_sound_is_rejected() {
+        let error = resolve_sound("missing", None).expect_err("unknown sound must fail");
+        assert_eq!(error.code(), "validation_invalid");
+    }
+
+    #[test]
+    fn stored_default_uses_the_configured_catalog_entry() {
+        let preset = resolve_sound("default", Some("death_and_rebirth"))
+            .expect("configured default resolves");
+        assert_eq!(preset.label, "Death & Rebirth");
+    }
+}

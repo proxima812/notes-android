@@ -23,11 +23,15 @@ impl<R: Runtime> AlarmClock for TauriAlarmClock<R> {
     fn schedule(&self, alarm: &Alarm) -> AppResult<bool> {
         let request = ScheduleRequest {
             occurrence_id: alarm.occurrence_id.clone(),
+            note_id: alarm.note_id.clone(),
             request_code: alarm.request_code,
             trigger_at_millis: alarm.trigger_at.as_millis(),
             title: alarm.title.clone(),
             body: alarm.body.clone(),
             exact: alarm.exact,
+            sound_id: alarm.sound_id.clone(),
+            sound_label: alarm.sound_label.clone(),
+            vibrate: alarm.vibrate,
         };
 
         self.app
@@ -46,6 +50,19 @@ impl<R: Runtime> AlarmClock for TauriAlarmClock<R> {
         self.app
             .reminders()
             .cancel(CancelRequest { request_code })
+            .map_err(|error| {
+                PlatformError::PluginCall {
+                    reason: error.to_string(),
+                }
+                .into()
+            })
+    }
+
+    fn take_launch_target(&self) -> AppResult<Option<String>> {
+        self.app
+            .reminders()
+            .take_launch_target()
+            .map(|target| target.note_id)
             .map_err(|error| {
                 PlatformError::PluginCall {
                     reason: error.to_string(),
