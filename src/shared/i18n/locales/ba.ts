@@ -50,6 +50,13 @@ export const ba: Dictionary = {
   "reminder.errorWhen": "Көндө һәм ваҡытты күрһәтегеҙ.",
   "reminder.errorPast": "Күрһәтелгән ваҡыт үткән инде.",
   "reminder.errorTitle": "Иҫкә төшөрөүгә исем бирегеҙ.",
+  "reminder.presets": "Әҙер ваҡыт",
+  "reminder.presetsPlaceholder": "Һайлағыҙ…",
+  "reminder.presetsEdit": "Ваҡыт ҡалыптарын үҙгәртергә",
+  "reminder.presetsDone": "Әҙер",
+  "reminder.presetsEmpty": "Ҡалыптар юҡ — үҙегеҙҙекен өҫтәгеҙ.",
+  "reminder.presetAdd": "Өҫтәргә",
+  "reminder.presetRemove": "{time} ҡалыбын бөтөрөргә",
 
   "templates.title": "Өлгөләр",
   "templates.dialog": "Яҙма өлгөләре",

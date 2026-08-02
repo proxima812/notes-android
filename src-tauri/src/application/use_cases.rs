@@ -12,8 +12,8 @@ use crate::domain::notes::{
     validate_content, validate_title, Note, NoteRepository, Page, PageRequest,
 };
 use crate::domain::reminders::{
-    resolve_sound, sound_presets, ReminderDraft, ReminderRepository, ScheduledReminder,
-    SoundPreset, FALLBACK_SOUND_ID,
+    resolve_sound, sound_presets, time_presets, ReminderDraft, ReminderRepository,
+    ScheduledReminder, SoundPreset, FALLBACK_SOUND_ID,
 };
 use crate::domain::search::{SearchHit, SearchRepository};
 use crate::error::{AppError, AppResult, NotificationError, ValidationError};
@@ -283,6 +283,36 @@ impl ReminderUseCases {
             items: sound_presets().to_vec(),
         })
     }
+
+    /// The times offered for one-tap picking, as `HH:MM`.
+    ///
+    /// # Errors
+    /// Fails when the stored set cannot be read or is not the form this build
+    /// writes.
+    pub fn time_presets(&self) -> AppResult<Vec<String>> {
+        let stored = self.reminders.time_presets()?;
+        Ok(labels(&time_presets::parse_stored(stored.as_deref())?))
+    }
+
+    /// Replaces the whole set with the one the user now wants.
+    ///
+    /// The whole list is written rather than a diff applied, because "delete
+    /// one of the times we shipped" and "add one of my own" are the same edit
+    /// from the core's side: this is the set, keep it.
+    ///
+    /// # Errors
+    /// Fails when a value is not a real `HH:MM` time, when there are more of
+    /// them than the cap allows, or on a database error.
+    pub fn save_time_presets(&self, values: &[String]) -> AppResult<Vec<String>> {
+        let presets = time_presets::normalise(values)?;
+        self.reminders
+            .set_time_presets(&time_presets::serialise(&presets)?)?;
+        Ok(labels(&presets))
+    }
+}
+
+fn labels(presets: &[time_presets::TimePreset]) -> Vec<String> {
+    presets.iter().map(|preset| preset.label()).collect()
 }
 
 fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> Alarm {

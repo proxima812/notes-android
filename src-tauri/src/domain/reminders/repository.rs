@@ -28,4 +28,12 @@ pub trait ReminderRepository: Send + Sync {
     ) -> AppResult<Option<ScheduledReminder>>;
 
     fn default_sound_id(&self) -> AppResult<Option<String>>;
+
+    /// The stored preset times, still in the form they were written in.
+    ///
+    /// `None` means the user has never edited the set, which is what separates
+    /// "use the shipped times" from "the user deleted every one of them".
+    fn time_presets(&self) -> AppResult<Option<String>>;
+
+    fn set_time_presets(&self, raw: &str) -> AppResult<()>;
 }

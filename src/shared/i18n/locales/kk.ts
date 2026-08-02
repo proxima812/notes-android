@@ -50,6 +50,13 @@ export const kk: Dictionary = {
   "reminder.errorWhen": "Күні мен уақытын көрсетіңіз.",
   "reminder.errorPast": "Көрсетілген уақыт өтіп кеткен.",
   "reminder.errorTitle": "Еске салуға атау беріңіз.",
+  "reminder.presets": "Дайын уақыт",
+  "reminder.presetsPlaceholder": "Таңдаңыз…",
+  "reminder.presetsEdit": "Уақыт үлгілерін өзгерту",
+  "reminder.presetsDone": "Дайын",
+  "reminder.presetsEmpty": "Үлгілер жоқ — өзіңіздікін қосыңыз.",
+  "reminder.presetAdd": "Қосу",
+  "reminder.presetRemove": "{time} үлгісін жою",
 
   "templates.title": "Үлгілер",
   "templates.dialog": "Жазба үлгілері",

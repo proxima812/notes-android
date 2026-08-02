@@ -64,6 +64,13 @@ export const ru = {
   "reminder.errorWhen": "Укажите дату и время.",
   "reminder.errorPast": "Указанное время уже прошло.",
   "reminder.errorTitle": "Добавьте название напоминания.",
+  "reminder.presets": "Готовое время",
+  "reminder.presetsPlaceholder": "Выбрать…",
+  "reminder.presetsEdit": "Изменить шаблоны времени",
+  "reminder.presetsDone": "Готово",
+  "reminder.presetsEmpty": "Шаблонов нет — добавьте свой.",
+  "reminder.presetAdd": "Добавить",
+  "reminder.presetRemove": "Удалить шаблон {time}",
 
   "templates.title": "Шаблоны",
   "templates.dialog": "Шаблоны заметок",

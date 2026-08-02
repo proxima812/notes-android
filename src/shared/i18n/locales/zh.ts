@@ -50,6 +50,13 @@ export const zh: Dictionary = {
   "reminder.errorWhen": "请选择日期和时间。",
   "reminder.errorPast": "所选时间已经过去。",
   "reminder.errorTitle": "请给提醒起个标题。",
+  "reminder.presets": "预设时间",
+  "reminder.presetsPlaceholder": "请选择…",
+  "reminder.presetsEdit": "编辑预设时间",
+  "reminder.presetsDone": "完成",
+  "reminder.presetsEmpty": "暂无预设，添加一个吧。",
+  "reminder.presetAdd": "添加",
+  "reminder.presetRemove": "删除预设 {time}",
 
   "templates.title": "模板",
   "templates.dialog": "笔记模板",

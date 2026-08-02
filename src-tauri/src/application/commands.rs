@@ -201,6 +201,23 @@ pub async fn reminder_sounds_list(
 }
 
 #[tauri::command]
+pub async fn reminder_time_presets_list(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<Vec<String>>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.time_presets()).await)
+}
+
+#[tauri::command]
+pub async fn reminder_time_presets_save(
+    state: State<'_, AppState>,
+    presets: Vec<String>,
+) -> Result<CommandResult<Vec<String>>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.save_time_presets(&presets)).await)
+}
+
+#[tauri::command]
 pub async fn search_run(
     state: State<'_, AppState>,
     request: SearchRequest,

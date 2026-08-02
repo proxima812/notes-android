@@ -50,6 +50,13 @@ export const tt: Dictionary = {
   "reminder.errorWhen": "Көнне һәм вакытны күрсәтегез.",
   "reminder.errorPast": "Күрсәтелгән вакыт узган инде.",
   "reminder.errorTitle": "Искә төшерүгә исем бирегез.",
+  "reminder.presets": "Әзер вакыт",
+  "reminder.presetsPlaceholder": "Сайлагыз…",
+  "reminder.presetsEdit": "Вакыт калыпларын үзгәртү",
+  "reminder.presetsDone": "Әзер",
+  "reminder.presetsEmpty": "Калыплар юк — үзегезнекен өстәгез.",
+  "reminder.presetAdd": "Өстәү",
+  "reminder.presetRemove": "{time} калыбын бетерү",
 
   "templates.title": "Үрнәкләр",
   "templates.dialog": "Язма үрнәкләре",

@@ -50,6 +50,13 @@ export const en: Dictionary = {
   "reminder.errorWhen": "Choose a date and a time.",
   "reminder.errorPast": "That time has already passed.",
   "reminder.errorTitle": "Give the reminder a title.",
+  "reminder.presets": "Preset time",
+  "reminder.presetsPlaceholder": "Pick one…",
+  "reminder.presetsEdit": "Edit preset times",
+  "reminder.presetsDone": "Done",
+  "reminder.presetsEmpty": "No presets — add your own.",
+  "reminder.presetAdd": "Add",
+  "reminder.presetRemove": "Remove the {time} preset",
 
   "templates.title": "Templates",
   "templates.dialog": "Note templates",

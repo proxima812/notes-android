@@ -116,3 +116,28 @@ export async function takeReminderLaunchTarget(): Promise<NoteId | null> {
 export async function listReminderSounds(): Promise<ReminderSoundCatalog> {
   return callCommand("reminder_sounds_list", reminderSoundCatalogSchema);
 }
+
+/**
+ * Preset times, always `HH:MM` so they drop straight into `<input type="time">`.
+ *
+ * The core sorts and deduplicates, so the order here is the order to show.
+ */
+export const timePresetsSchema = z.array(z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/));
+
+export type TimePresets = z.infer<typeof timePresetsSchema>;
+
+export async function listReminderTimePresets(): Promise<TimePresets> {
+  return callCommand("reminder_time_presets_list", timePresetsSchema);
+}
+
+/**
+ * Stores the whole set, not a change to it.
+ *
+ * Adding one of the user's own times and deleting one of the six we ship are the
+ * same call: this is the list now.
+ */
+export async function saveReminderTimePresets(presets: readonly string[]): Promise<TimePresets> {
+  return callCommand("reminder_time_presets_save", timePresetsSchema, {
+    presets: [...presets],
+  });
+}

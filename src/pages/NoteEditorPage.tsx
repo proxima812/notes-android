@@ -9,6 +9,8 @@ import {
   deleteReminderForNote,
   getReminderForNote,
   listReminderSounds,
+  listReminderTimePresets,
+  saveReminderTimePresets,
   upsertReminderForNote,
 } from "@/features/reminders/api";
 import { ReminderPanel } from "@/features/reminders/ui/ReminderPanel";
@@ -123,6 +125,19 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
     queryKey: ["reminder-sounds"],
     queryFn: listReminderSounds,
   });
+  const timePresets = useQuery({
+    queryKey: ["reminder-time-presets"],
+    queryFn: listReminderTimePresets,
+  });
+  const saveTimePresets = useMutation({
+    mutationFn: saveReminderTimePresets,
+    // The core is what sorts and deduplicates, so the answer it gives is the
+    // list to show — writing the request into the cache would briefly display
+    // an order the user is about to see change.
+    onSuccess: (next) => {
+      client.setQueryData(["reminder-time-presets"], next);
+    },
+  });
   const saveReminder = useMutation({
     mutationFn: upsertReminderForNote,
     onSuccess: async () => {
@@ -207,17 +222,23 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
 
       {showReminder && (
         <div className="px-4 pb-2">
-          {reminder.isPending || sounds.isPending ? (
+          {reminder.isPending || sounds.isPending || timePresets.isPending ? (
             <p className="text-content-muted py-3 text-sm">{t("reminder.loading")}</p>
-          ) : reminder.error !== null || sounds.error !== null ? (
+          ) : reminder.error !== null || sounds.error !== null || timePresets.error !== null ? (
             <p className="text-danger py-3 text-sm">
-              {describeError(reminder.error ?? sounds.error, t)}
+              {describeError(reminder.error ?? sounds.error ?? timePresets.error, t)}
             </p>
-          ) : reminder.data !== undefined && sounds.data !== undefined ? (
+          ) : reminder.data !== undefined &&
+            sounds.data !== undefined &&
+            timePresets.data !== undefined ? (
             <ReminderPanel
               initial={reminder.data}
               sounds={sounds.data}
               noteTitle={title}
+              presets={timePresets.data}
+              onSavePresets={(next) => {
+                saveTimePresets.mutate(next);
+              }}
               busy={saveReminder.isPending || removeReminder.isPending}
               error={
                 saveReminder.error !== null

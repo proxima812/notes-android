@@ -1,12 +1,15 @@
-//! One-shot reminders and the bundled notification-sound catalog.
+//! One-shot reminders, the bundled notification-sound catalog and the times
+//! offered for one-tap picking.
 
 pub mod repository;
+pub mod time_presets;
 
 use crate::domain::clock::Timestamp;
 use crate::domain::ids::{NoteId, ReminderId, ReminderOccurrenceId};
 use crate::error::{AppError, AppResult, ValidationError};
 
 pub use repository::ReminderRepository;
+pub use time_presets::{TimePreset, TIME_PRESETS_SETTING_KEY};
 
 pub const DEFAULT_SOUND_SETTING_KEY: &str = "reminders.default_sound";
 pub const FALLBACK_SOUND_ID: &str = "death_and_rebirth";

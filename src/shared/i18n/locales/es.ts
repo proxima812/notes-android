@@ -50,6 +50,13 @@ export const es: Dictionary = {
   "reminder.errorWhen": "Indica la fecha y la hora.",
   "reminder.errorPast": "Esa hora ya pasó.",
   "reminder.errorTitle": "Ponle un título al recordatorio.",
+  "reminder.presets": "Hora predefinida",
+  "reminder.presetsPlaceholder": "Elige una…",
+  "reminder.presetsEdit": "Editar horas predefinidas",
+  "reminder.presetsDone": "Listo",
+  "reminder.presetsEmpty": "Sin horas guardadas: añade la tuya.",
+  "reminder.presetAdd": "Añadir",
+  "reminder.presetRemove": "Eliminar la hora {time}",
 
   "templates.title": "Plantillas",
   "templates.dialog": "Plantillas de notas",

@@ -8,7 +8,7 @@ use crate::domain::clock::{SharedClock, Timestamp};
 use crate::domain::ids::{NoteId, ReminderId, ReminderOccurrenceId};
 use crate::domain::reminders::{
     Reminder, ReminderDraft, ReminderOccurrence, ReminderRepository, ScheduledReminder,
-    DEFAULT_SOUND_SETTING_KEY,
+    DEFAULT_SOUND_SETTING_KEY, TIME_PRESETS_SETTING_KEY,
 };
 use crate::error::{AppError, AppResult};
 
@@ -23,6 +23,19 @@ impl SqliteReminderRepository {
     #[must_use]
     pub fn new(database: Arc<Database>, clock: SharedClock) -> Self {
         Self { database, clock }
+    }
+
+    fn read_setting(&self, key: &str) -> AppResult<Option<String>> {
+        self.database.with_connection(|connection| {
+            connection
+                .query_row(
+                    "SELECT value FROM app_settings WHERE key = ?1",
+                    [key],
+                    |row| row.get(0),
+                )
+                .optional()
+                .map_err(AppError::from)
+        })
     }
 }
 
@@ -266,14 +279,26 @@ impl ReminderRepository for SqliteReminderRepository {
     }
 
     fn default_sound_id(&self) -> AppResult<Option<String>> {
+        self.read_setting(DEFAULT_SOUND_SETTING_KEY)
+    }
+
+    fn time_presets(&self) -> AppResult<Option<String>> {
+        self.read_setting(TIME_PRESETS_SETTING_KEY)
+    }
+
+    fn set_time_presets(&self, raw: &str) -> AppResult<()> {
+        let now = self.clock.now();
         self.database.with_connection(|connection| {
             connection
-                .query_row(
-                    "SELECT value FROM app_settings WHERE key = ?1",
-                    [DEFAULT_SOUND_SETTING_KEY],
-                    |row| row.get(0),
+                .execute(
+                    "INSERT INTO app_settings (key, value, updated_at)
+                          VALUES (?1, ?2, ?3)
+                     ON CONFLICT (key) DO UPDATE
+                            SET value = excluded.value,
+                                updated_at = excluded.updated_at",
+                    params![TIME_PRESETS_SETTING_KEY, raw, now.as_millis()],
                 )
-                .optional()
+                .map(|_| ())
                 .map_err(AppError::from)
         })
     }

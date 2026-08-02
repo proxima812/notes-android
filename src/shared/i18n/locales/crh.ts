@@ -51,6 +51,13 @@ export const crh: Dictionary = {
   "reminder.errorWhen": "Tarih ve vaqıtnı kösteriñiz.",
   "reminder.errorPast": "Kösterilgen vaqıt keçip ketti.",
   "reminder.errorTitle": "Hatırlatmağa ad beriñiz.",
+  "reminder.presets": "Azır vaqıt",
+  "reminder.presetsPlaceholder": "Saylañız…",
+  "reminder.presetsEdit": "Vaqıt qalıplarını deñiştir",
+  "reminder.presetsDone": "Azır",
+  "reminder.presetsEmpty": "Qalıp yoq — özüñizniki qoşuñız.",
+  "reminder.presetAdd": "Qoş",
+  "reminder.presetRemove": "{time} qalıbını sil",
 
   "templates.title": "Şablonlar",
   "templates.dialog": "Not şablonları",
