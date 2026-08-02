@@ -1,14 +1,32 @@
-# Organizer — локальный Android-органайзер
+# xima.keeps — локальный Android-органайзер
 
-Заметки, задачи и системные напоминания. Работает полностью на устройстве:
+Заметки, поиск по ним и системные напоминания. Работает полностью на устройстве:
 без сервера, аккаунта, облачной синхронизации, аналитики и обязательного интернета.
 
 - **Оболочка:** Tauri 2
-- **Ядро:** Rust (бизнес-логика, SQLite, поиск, повторения, парсинг, шифрование)
+- **Ядро:** Rust (бизнес-логика, SQLite, поиск, валидация)
 - **Интерфейс:** React 19 + TypeScript + Tailwind CSS v4
 - **Хранилище:** локальная SQLite + FTS5
-- **Напоминания:** Rust + Kotlin (`AlarmManager`, `NotificationManager`, `WorkManager`)
+- **Напоминания:** Rust + Kotlin (`AlarmManager`, `NotificationManager`)
 - **Цель:** подписанный APK для Google Pixel 8a (`arm64-v8a`)
+
+## 0. Что уже работает, а чего ещё нет
+
+Схема БД (`migrations/0001_initial.sql`) заложена под весь продукт целиком —
+задачи, вложения, папки, теги, повторения, бэкапы. Написана из этого пока
+меньшая часть, и таблица ниже — про написанное, а не про схему.
+
+| Есть | Ещё нет |
+| --- | --- |
+| Заметки: rich text, шаблоны, цветовые градиенты | Задачи и чек-листы как отдельная сущность |
+| Корзина: удаление, восстановление, очистка | Вложения и голосовые заметки |
+| Полнотекстовый поиск (FTS5) + история запросов | Папки и теги в интерфейсе |
+| Разовые напоминания со звуком и шаблонами времени | Повторяющиеся напоминания (RRULE), отложить |
+| Восстановление будильников после перезагрузки | Резервные копии и экспорт |
+| Темы оформления и 8 языков интерфейса | Шифрование базы |
+
+Приложения `tasks`, `attachments`, `backup` в `src/features` нет: если оно не
+перечислено в левой колонке, значит его не написали.
 
 ---
 
@@ -133,14 +151,17 @@ Keystore и пароли **никогда не попадают в Git** — о�
 Выполнить один раз и **сохранить файл и пароли в надёжном месте**. Потеря
 keystore означает невозможность выпустить обновление поверх установленного APK.
 
+Имя файла — `приложение-разработчик-дата`, чтобы по нему было видно, каким
+ключом подписан установленный на телефоне APK.
+
 ```bash
 mkdir -p "$HOME/.android-keystores"
 chmod 700 "$HOME/.android-keystores"
 
 source ./scripts/android-env.sh
 keytool -genkeypair -v \
-  -keystore "$HOME/.android-keystores/organizer-release.jks" \
-  -alias organizer \
+  -keystore "$HOME/.android-keystores/ximakeeps-proxima812-20260802.jks" \
+  -alias ximakeeps \
   -keyalg RSA \
   -keysize 4096 \
   -validity 10000 \
@@ -155,9 +176,9 @@ keytool -genkeypair -v \
 Создайте `src-tauri/gen/android/keystore.properties` (игнорируется Git):
 
 ```properties
-storeFile=/Users/ВАШ_ПОЛЬЗОВАТЕЛЬ/.android-keystores/organizer-release.jks
+storeFile=/Users/ВАШ_ПОЛЬЗОВАТЕЛЬ/.android-keystores/ximakeeps-proxima812-20260802.jks
 storePassword=ВАШ_ПАРОЛЬ
-keyAlias=organizer
+keyAlias=ximakeeps
 keyPassword=ВАШ_ПАРОЛЬ
 ```
 
@@ -187,25 +208,23 @@ adb install -r "$APK"
 ```text
 src/                  React UI (только интерфейс)
 ├── app/              провайдеры, роутинг, тема
-├── pages/            экраны
-├── widgets/          составные блоки экранов
-├── features/         notes, tasks, reminders, search, attachments,
-│                     templates, backup, settings
-├── entities/         доменные модели для UI
-├── shared/           api, components, validation, hooks, lib, types
+├── pages/            LibraryPage, NoteEditorPage
+├── features/         notes, reminders, settings
+├── shared/           api, i18n, lib, test, types, ui
 └── styles/           Tailwind v4
 
 src-tauri/
 ├── src/
-│   ├── domain/          бизнес-правила
+│   ├── domain/          notes, reminders, search, clock, ids
 │   ├── application/     commands, use_cases, dto
-│   ├── infrastructure/  sqlite, filesystem, encryption, notifications, logging
+│   ├── infrastructure/  sqlite (connection, migrations, репозитории)
 │   ├── platform/        мост к Android-плагинам
 │   ├── error.rs
 │   ├── state.rs
 │   └── lib.rs
 ├── migrations/          версионируемые SQL-миграции
 ├── capabilities/        разрешения Tauri
+├── plugins/reminders/   Tauri-плагин: Rust API + Kotlin (AlarmManager)
 └── gen/android/         Gradle-проект (генерируется)
 ```
 
@@ -214,7 +233,10 @@ src-tauri/
 - React не обращается к SQLite и не содержит бизнес-логики;
 - Kotlin содержит только вызовы Android API, без бизнес-логики;
 - SQL живёт в repositories, не в Tauri-командах;
-- системные напоминания не используют `setTimeout`/`setInterval`.
+- системные напоминания не используют `setTimeout`/`setInterval`;
+- Kotlin помнит только те будильники, которые сам поставил (`AlarmStore`), —
+  это не вторая копия напоминаний, а то, что `BootReceiver` заново отдаёт
+  системе после перезагрузки, не заглядывая в базу.
 
 ## 7. Приватность
 
