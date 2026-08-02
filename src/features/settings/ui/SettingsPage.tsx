@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Check } from "lucide-react";
 
+import { AppIconPicker } from "@/features/appearance/ui/AppIconPicker";
 import { BackupSection } from "@/features/backup/ui/BackupSection";
 import { appInfo } from "@/features/notes/api";
 import { describeError } from "@/shared/api/errors";
@@ -115,6 +116,8 @@ export function SettingsPage({ onBack }: { readonly onBack: () => void }): React
           })}
         </div>
       </section>
+
+      <AppIconPicker />
 
       <BackupSection />
 

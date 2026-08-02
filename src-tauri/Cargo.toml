@@ -34,6 +34,8 @@ parking_lot = "0.12"
 tauri-plugin-reminders = { path = "plugins/reminders" }
 # In-tree: the bridge to the system document picker, used by backup and restore.
 tauri-plugin-documents = { path = "plugins/documents" }
+# In-tree: switching which launcher icon the app shows.
+tauri-plugin-appicon = { path = "plugins/appicon" }
 
 [dev-dependencies]
 tempfile = "3"

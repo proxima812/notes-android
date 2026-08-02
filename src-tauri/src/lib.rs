@@ -15,7 +15,10 @@ use std::sync::Arc;
 
 use tauri::Manager as _;
 
-use crate::platform::{AlarmClock, DocumentStore, TauriAlarmClock, TauriDocumentStore};
+use crate::platform::{
+    AlarmClock, AppIconSwitch, DocumentStore, TauriAlarmClock, TauriAppIconSwitch,
+    TauriDocumentStore,
+};
 use crate::state::AppState;
 
 /// Installs logging.
@@ -47,6 +50,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_reminders::init())
         .plugin(tauri_plugin_documents::init())
+        .plugin(tauri_plugin_appicon::init())
         .setup(|app| {
             // The database lives in the app's private directory, which Android
             // wipes on uninstall and keeps out of reach of other apps.
@@ -58,7 +62,9 @@ pub fn run() {
             let alarms: Arc<dyn AlarmClock> = Arc::new(TauriAlarmClock::new(app.handle().clone()));
             let documents: Arc<dyn DocumentStore> =
                 Arc::new(TauriDocumentStore::new(app.handle().clone()));
-            let state = AppState::bootstrap(&data_dir, staging_dir, alarms, documents)?;
+            let icons: Arc<dyn AppIconSwitch> =
+                Arc::new(TauriAppIconSwitch::new(app.handle().clone()));
+            let state = AppState::bootstrap(&data_dir, staging_dir, alarms, documents, icons)?;
             app.manage(state);
             Ok(())
         })
@@ -88,6 +94,8 @@ pub fn run() {
             application::commands::backup_export,
             application::commands::backup_import,
             application::commands::backup_latest,
+            application::commands::app_icons_list,
+            application::commands::app_icons_select,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

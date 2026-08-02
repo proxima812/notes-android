@@ -66,6 +66,9 @@ export const ba: Dictionary = {
   "reminder.repeat.monthly": "Һәр ай",
   "reminder.repeat.yearly": "Һәр йыл",
 
+  "appIcon.title": "Ҡушымта иконкаһы",
+  "appIcon.hint": "Лаунчер иконканы шунда уҡ яңыртмаҫҡа мөмкин — ҡушымталар исемлеген ябып, ҡабат асығыҙ.",
+
   "backup.title": "Резерв күсермә",
   "backup.description": "Күсермә һеҙ ҡуйған урында ғына һаҡлана. Ҡушымта бер ҡайҙа ла бер нәмә ебәрмәй.",
   "backup.export": "Күсермә һаҡларға",

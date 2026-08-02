@@ -451,6 +451,38 @@ pub struct ReminderSoundDto {
     pub label: String,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppIconDto {
+    pub id: String,
+    pub label: String,
+    pub accent: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppIconCatalogDto {
+    pub selected_id: String,
+    pub items: Vec<AppIconDto>,
+}
+
+impl From<crate::application::app_icons::AppIconCatalog> for AppIconCatalogDto {
+    fn from(catalog: crate::application::app_icons::AppIconCatalog) -> Self {
+        Self {
+            selected_id: catalog.selected_id,
+            items: catalog
+                .items
+                .into_iter()
+                .map(|icon| AppIconDto {
+                    id: icon.id.to_owned(),
+                    label: icon.label.to_owned(),
+                    accent: icon.accent.to_owned(),
+                })
+                .collect(),
+        }
+    }
+}
+
 /// What a backup or restore did, as the settings screen reports it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

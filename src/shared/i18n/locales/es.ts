@@ -66,6 +66,9 @@ export const es: Dictionary = {
   "reminder.repeat.monthly": "Cada mes",
   "reminder.repeat.yearly": "Cada año",
 
+  "appIcon.title": "Icono de la aplicación",
+  "appIcon.hint": "El lanzador puede tardar un momento en actualizarse; cerrar y volver a abrir la lista de aplicaciones suele bastar.",
+
   "backup.title": "Copia de seguridad",
   "backup.description": "La copia se queda donde tú la dejes. La aplicación no envía nada a ninguna parte.",
   "backup.export": "Guardar una copia",

@@ -66,6 +66,9 @@ export const kk: Dictionary = {
   "reminder.repeat.monthly": "Ай сайын",
   "reminder.repeat.yearly": "Жыл сайын",
 
+  "appIcon.title": "Қолданба белгішесі",
+  "appIcon.hint": "Лаунчер белгішені бірден жаңартпауы мүмкін — қолданбалар тізімін жауып, қайта ашыңыз.",
+
   "backup.title": "Сақтық көшірме",
   "backup.description": "Көшірме сіз қойған жерде ғана сақталады. Қолданба ешқайда ештеңе жібермейді.",
   "backup.export": "Көшірме сақтау",

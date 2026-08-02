@@ -1,0 +1,50 @@
+<svg width="1096" height="1096" viewBox="0 0 1096 1096" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip_neon)">
+<rect width="1096" height="1096" fill="#2A1B63"/>
+<rect width="1096" height="1096" fill="url(#glow_neon)"/>
+<rect x="14.9844" y="14.9844" width="1066.03" height="1066.03" stroke="url(#border_neon)" stroke-width="29.9688"/>
+<g filter="url(#shadow_neon)">
+<path d="M364.82 386.948C328.848 396.587 307.501 433.561 317.14 469.532L386.948 730.061C396.586 766.032 433.561 787.379 469.532 777.741L621.168 737.11L592.263 629.235C582.624 593.264 603.971 556.289 639.943 546.651L748.835 517.473L707.932 364.82C698.294 328.849 661.319 307.501 625.348 317.14L364.82 386.948Z" fill="url(#markNeon)"/>
+<g filter="url(#inner_neon)">
+<path d="M635.75 616.49C632.588 604.686 639.592 592.554 651.395 589.392L760.288 560.214C766.072 581.802 763.042 604.806 751.868 624.173L716.853 684.821C705.667 704.181 687.261 718.307 665.673 724.092L664.655 724.365L635.75 616.49Z" fill="#D9C7FF"/>
+</g>
+</g>
+</g>
+<defs>
+<linearGradient id="markNeon" x1="317" y1="317" x2="749" y2="778" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FFFFFF"/>
+<stop offset="1" stop-color="#E9DDFF"/>
+</linearGradient>
+<filter id="shadow_neon" x="235.622" y="246.325" width="602.459" height="619.354" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dx="-2.14062" dy="8.5625"/>
+<feGaussianBlur stdDeviation="38.5312"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 1 0 0 0 0 0.48 0 0 0 0 0.9 0 0 0 0.55 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="dropShadow"/>
+<feBlend mode="normal" in="SourceGraphic" in2="dropShadow" result="shape"/>
+</filter>
+<filter id="inner_neon" x="634.991" y="560.214" width="134.59" height="172.713" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feBlend mode="normal" in="SourceGraphic" in2="BackgroundImageFix" result="shape"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dx="6.42188" dy="8.5625"/>
+<feGaussianBlur stdDeviation="4.28125"/>
+<feComposite in2="hardAlpha" operator="arithmetic" k2="-1" k3="1"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.25 0"/>
+<feBlend mode="normal" in2="shape" result="innerShadow"/>
+</filter>
+<radialGradient id="glow_neon" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(775.977 792.031) rotate(126.87) scale(379.961)">
+<stop stop-color="#7B3FD8"/>
+<stop offset="1" stop-color="#2A1B63"/>
+</radialGradient>
+<linearGradient id="border_neon" x1="1048.91" y1="52.4453" x2="84.5546" y2="1037.13" gradientUnits="userSpaceOnUse">
+<stop stop-color="#B071FF"/>
+<stop offset="1" stop-color="#4B2AA8"/>
+</linearGradient>
+<clipPath id="clip_neon">
+<rect width="1096" height="1096" fill="white"/>
+</clipPath>
+</defs>
+</svg>

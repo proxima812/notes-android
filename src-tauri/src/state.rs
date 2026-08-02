@@ -7,15 +7,16 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::application::app_icons::AppIconUseCases;
 use crate::application::backup::BackupUseCases;
 use crate::application::use_cases::{NoteUseCases, ReminderUseCases, SearchUseCases};
 use crate::domain::clock::{SharedClock, SystemClock};
 use crate::error::AppResult;
 use crate::infrastructure::sqlite::{
     Database, SqliteBackupArchive, SqliteBackupRepository, SqliteNoteRepository,
-    SqliteReminderRepository, SqliteSearchRepository,
+    SqliteReminderRepository, SqliteSearchRepository, SqliteSettingsRepository,
 };
-use crate::platform::{AlarmClock, DocumentStore};
+use crate::platform::{AlarmClock, AppIconSwitch, DocumentStore};
 
 /// File name of the database inside the app's private directory.
 pub const DATABASE_FILE: &str = "organizer.sqlite";
@@ -25,6 +26,7 @@ pub struct AppState {
     pub reminders: Arc<ReminderUseCases>,
     pub search: Arc<SearchUseCases>,
     pub backup: Arc<BackupUseCases>,
+    pub app_icons: Arc<AppIconUseCases>,
     pub database: Arc<Database>,
     pub clock: SharedClock,
 }
@@ -39,9 +41,10 @@ impl AppState {
         staging_dir: PathBuf,
         alarms: Arc<dyn AlarmClock>,
         documents: Arc<dyn DocumentStore>,
+        icons: Arc<dyn AppIconSwitch>,
     ) -> AppResult<Self> {
         let clock: SharedClock = Arc::new(SystemClock);
-        Self::with_services(data_dir, staging_dir, clock, alarms, documents)
+        Self::with_services(data_dir, staging_dir, clock, alarms, documents, icons)
     }
 
     /// Same as [`Self::bootstrap`] but with injected platform services, for tests.
@@ -54,6 +57,7 @@ impl AppState {
         clock: SharedClock,
         alarms: Arc<dyn AlarmClock>,
         documents: Arc<dyn DocumentStore>,
+        icons: Arc<dyn AppIconSwitch>,
     ) -> AppResult<Self> {
         let path = data_dir.join(DATABASE_FILE);
         tracing::info!("opening the local database");
@@ -87,7 +91,13 @@ impl AppState {
             staging_dir,
         ));
 
+        let settings = Arc::new(SqliteSettingsRepository::new(
+            Arc::clone(&database),
+            Arc::clone(&clock),
+        ));
+
         Ok(Self {
+            app_icons: Arc::new(AppIconUseCases::new(icons, settings)),
             backup,
             notes: Arc::new(NoteUseCases::new(note_repository)),
             reminders: Arc::new(ReminderUseCases::new(
@@ -124,6 +134,22 @@ mod tests {
 
     fn fake_documents() -> Arc<dyn DocumentStore> {
         Arc::new(FakeDocumentStore)
+    }
+
+    struct FakeIconSwitch;
+
+    impl AppIconSwitch for FakeIconSwitch {
+        fn select(&self, _alias: &str, _known: &[String]) -> AppResult<()> {
+            Ok(())
+        }
+
+        fn current(&self, _known: &[String]) -> AppResult<Option<String>> {
+            Ok(None)
+        }
+    }
+
+    fn fake_icons() -> Arc<dyn AppIconSwitch> {
+        Arc::new(FakeIconSwitch)
     }
 
     struct FakeAlarmClock;
@@ -172,6 +198,7 @@ mod tests {
             clock,
             fake_alarms(),
             fake_documents(),
+            fake_icons(),
         )
         .expect("bootstraps reminders");
 
@@ -191,6 +218,7 @@ mod tests {
             clock,
             fake_alarms(),
             fake_documents(),
+            fake_icons(),
         )
         .expect("bootstraps");
         assert!(directory.path().join(DATABASE_FILE).exists());
@@ -224,6 +252,7 @@ mod tests {
                 Arc::clone(&clock),
                 fake_alarms(),
                 fake_documents(),
+                fake_icons(),
             )
             .expect("bootstraps");
             state
@@ -241,6 +270,7 @@ mod tests {
             clock,
             fake_alarms(),
             fake_documents(),
+            fake_icons(),
         )
         .expect("bootstraps again");
         let page = restarted

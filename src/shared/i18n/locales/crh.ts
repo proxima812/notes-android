@@ -67,6 +67,9 @@ export const crh: Dictionary = {
   "reminder.repeat.monthly": "Er ay",
   "reminder.repeat.yearly": "Er yıl",
 
+  "appIcon.title": "Uygulama işareti",
+  "appIcon.hint": "Launcher işaretni deral yañartmaz olabilir — uygulamalar cedvelini qapatıp kene açıñız.",
+
   "backup.title": "Zapas nusxa",
   "backup.description": "Nusxa siz qoygan yerde saqlana. Uygulama iç bir yerge iç bir şey yollamay.",
   "backup.export": "Nusxa saqla",

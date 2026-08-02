@@ -66,6 +66,9 @@ export const en: Dictionary = {
   "reminder.repeat.monthly": "Every month",
   "reminder.repeat.yearly": "Every year",
 
+  "appIcon.title": "App icon",
+  "appIcon.hint": "The launcher may take a moment to catch up — closing and reopening the app list usually does it.",
+
   "backup.title": "Backup",
   "backup.description": "The copy stays wherever you put it. The app sends nothing anywhere.",
   "backup.export": "Save a copy",

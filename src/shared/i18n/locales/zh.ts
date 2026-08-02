@@ -66,6 +66,9 @@ export const zh: Dictionary = {
   "reminder.repeat.monthly": "每月",
   "reminder.repeat.yearly": "每年",
 
+  "appIcon.title": "应用图标",
+  "appIcon.hint": "启动器可能不会立刻更新图标——关闭并重新打开应用列表通常就好了。",
+
   "backup.title": "备份",
   "backup.description": "备份只留在你放置的位置。应用不会向任何地方发送数据。",
   "backup.export": "保存备份",

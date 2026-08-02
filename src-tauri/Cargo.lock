@@ -1874,6 +1874,7 @@ dependencies = [
  "sha2",
  "tauri",
  "tauri-build",
+ "tauri-plugin-appicon",
  "tauri-plugin-documents",
  "tauri-plugin-reminders",
  "tempfile",
@@ -3241,6 +3242,16 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-appicon"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

@@ -66,6 +66,9 @@ export const tt: Dictionary = {
   "reminder.repeat.monthly": "Һәр ай",
   "reminder.repeat.yearly": "Һәр ел",
 
+  "appIcon.title": "Кушымта иконкасы",
+  "appIcon.hint": "Лаунчер иконканы шунда ук яңартмаска мөмкин — кушымталар исемлеген ябып, кабат ачыгыз.",
+
   "backup.title": "Резерв күчермә",
   "backup.description": "Күчермә сез куйган урында гына саклана. Кушымта беркая да бернәрсә җибәрми.",
   "backup.export": "Күчермә саклау",

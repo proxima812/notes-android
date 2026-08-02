@@ -16,9 +16,9 @@ use crate::error::{AppError, AppResult, PlatformError};
 use crate::state::AppState;
 
 use super::dto::{
-    BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest, ListNotesRequest, NoteDto,
-    NoteSummaryDto, PageDto, ReminderDto, ReminderSoundCatalogDto, SearchHitDto, SearchRequest,
-    UpdateNoteRequest, UpsertReminderRequest,
+    AppIconCatalogDto, BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest,
+    ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, ReminderDto, ReminderSoundCatalogDto,
+    SearchHitDto, SearchRequest, UpdateNoteRequest, UpsertReminderRequest,
 };
 use super::use_cases::move_note_to_trash;
 
@@ -256,6 +256,23 @@ pub async fn backup_latest(
             .map(|record| record.map(BackupRecordDto::from))
     })
     .await)
+}
+
+#[tauri::command]
+pub async fn app_icons_list(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<AppIconCatalogDto>, ()> {
+    let icons = Arc::clone(&state.app_icons);
+    Ok(blocking(move || icons.catalog().map(AppIconCatalogDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn app_icons_select(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<CommandResult<AppIconCatalogDto>, ()> {
+    let icons = Arc::clone(&state.app_icons);
+    Ok(blocking(move || icons.select(&id).map(AppIconCatalogDto::from)).await)
 }
 
 #[tauri::command]
