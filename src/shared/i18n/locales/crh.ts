@@ -71,6 +71,16 @@ export const crh: Dictionary = {
   "reminder.repeat.monthly": "Er ay",
   "reminder.repeat.yearly": "Er yıl",
 
+  "filing.title": "Papkalar ve tegler",
+  "filing.folders": "Papkalar",
+  "filing.tags": "Tegler",
+  "filing.newFolder": "Yañı papka",
+  "filing.addFolder": "Papka yarat",
+  "filing.newTag": "Yañı teg",
+  "filing.addTag": "Teg yarat",
+  "filing.open": "Nottaki papkalar ve tegler",
+  "filing.all": "Episi",
+
   "appIcon.title": "Uygulama işareti",
   "appIcon.hint": "Launcher işaretni deral yañartmaz olabilir — uygulamalar cedvelini qapatıp kene açıñız.",
 

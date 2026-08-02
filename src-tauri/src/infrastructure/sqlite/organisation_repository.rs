@@ -1,0 +1,374 @@
+//! Folders, tags, and which notes wear them.
+
+use std::sync::Arc;
+
+use rusqlite::{params, Row};
+
+use crate::domain::clock::{SharedClock, Timestamp};
+use crate::domain::ids::{FolderId, NoteId, TagId};
+use crate::domain::organisation::{validate_label, Folder, OrganisationRepository, Tag};
+use crate::error::{AppError, AppResult};
+
+use super::Database;
+
+pub struct SqliteOrganisationRepository {
+    database: Arc<Database>,
+    clock: SharedClock,
+}
+
+impl SqliteOrganisationRepository {
+    #[must_use]
+    pub fn new(database: Arc<Database>, clock: SharedClock) -> Self {
+        Self { database, clock }
+    }
+}
+
+fn map_tag(row: &Row<'_>) -> rusqlite::Result<Tag> {
+    Ok(Tag {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        usage_count: row.get(2)?,
+    })
+}
+
+fn map_folder(row: &Row<'_>) -> rusqlite::Result<Folder> {
+    Ok(Folder {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        note_count: row.get(2)?,
+    })
+}
+
+/// Counted from the join table rather than from `tags.usage_count`: a stored
+/// counter is one more thing that can drift, and the join is cheap at this size.
+const SELECT_TAGS: &str = "SELECT t.id, t.name,
+            (SELECT COUNT(*) FROM note_tags nt
+               JOIN notes n ON n.id = nt.note_id
+              WHERE nt.tag_id = t.id AND n.deleted_at IS NULL)
+       FROM tags t";
+
+const SELECT_FOLDERS: &str = "SELECT f.id, f.name,
+            (SELECT COUNT(*) FROM note_folders nf
+               JOIN notes n ON n.id = nf.note_id
+              WHERE nf.folder_id = f.id AND n.deleted_at IS NULL)
+       FROM folders f";
+
+impl OrganisationRepository for SqliteOrganisationRepository {
+    fn tags(&self) -> AppResult<Vec<Tag>> {
+        self.database.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(&format!(
+                    "{SELECT_TAGS} ORDER BY 3 DESC, t.name COLLATE NOCASE"
+                ))
+                .map_err(AppError::from)?;
+            let rows = statement
+                .query_map([], map_tag)
+                .map_err(AppError::from)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(AppError::from)?;
+            Ok(rows)
+        })
+    }
+
+    fn ensure_tag(&self, name: &str, now: Timestamp) -> AppResult<Tag> {
+        let name = validate_label(name, "name")?;
+        let folded = name.to_lowercase();
+        self.database.in_transaction(|transaction| {
+            // Case folding happens here rather than in SQL. SQLite's `NOCASE`
+            // collation — and its `lower()` — only fold ASCII, so the index
+            // alone would let `Работа` and `работа` become two tags that look
+            // identical in every list the user ever sees.
+            let mut statement = transaction
+                .prepare("SELECT id, name FROM tags")
+                .map_err(AppError::from)?;
+            let existing = statement
+                .query_map([], |row| {
+                    Ok((row.get::<_, TagId>(0)?, row.get::<_, String>(1)?))
+                })
+                .map_err(AppError::from)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(AppError::from)?
+                .into_iter()
+                .find(|(_, stored)| stored.to_lowercase() == folded)
+                .map(|(id, _)| id);
+            drop(statement);
+
+            let id = match existing {
+                Some(id) => id,
+                None => {
+                    let id = TagId::new();
+                    transaction
+                        .execute(
+                            "INSERT INTO tags (id, name, created_at, updated_at)
+                                  VALUES (?1, ?2, ?3, ?3)",
+                            params![id, name, now.as_millis()],
+                        )
+                        .map_err(AppError::from)?;
+                    id
+                }
+            };
+
+            transaction
+                .query_row(&format!("{SELECT_TAGS} WHERE t.id = ?1"), [id], map_tag)
+                .map_err(AppError::from)
+        })
+    }
+
+    fn delete_tag(&self, id: TagId) -> AppResult<()> {
+        self.database.with_connection(|connection| {
+            // `note_tags` cascades, so the notes keep everything but the label.
+            connection
+                .execute("DELETE FROM tags WHERE id = ?1", [id])
+                .map(|_| ())
+                .map_err(AppError::from)
+        })
+    }
+
+    fn tags_of_note(&self, note_id: NoteId) -> AppResult<Vec<Tag>> {
+        self.database.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(&format!(
+                    "{SELECT_TAGS}
+                      JOIN note_tags nt ON nt.tag_id = t.id
+                     WHERE nt.note_id = ?1
+                     ORDER BY t.name COLLATE NOCASE"
+                ))
+                .map_err(AppError::from)?;
+            let rows = statement
+                .query_map([note_id], map_tag)
+                .map_err(AppError::from)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(AppError::from)?;
+            Ok(rows)
+        })
+    }
+
+    fn set_note_tags(&self, note_id: NoteId, tags: &[TagId], now: Timestamp) -> AppResult<()> {
+        self.database.in_transaction(|transaction| {
+            transaction
+                .execute("DELETE FROM note_tags WHERE note_id = ?1", [note_id])
+                .map_err(AppError::from)?;
+            for tag in tags {
+                transaction
+                    .execute(
+                        "INSERT OR IGNORE INTO note_tags (note_id, tag_id, created_at)
+                              VALUES (?1, ?2, ?3)",
+                        params![note_id, tag, now.as_millis()],
+                    )
+                    .map_err(AppError::from)?;
+            }
+            Ok(())
+        })
+    }
+
+    fn folders(&self) -> AppResult<Vec<Folder>> {
+        self.database.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(&format!(
+                    "{SELECT_FOLDERS}
+                     WHERE f.deleted_at IS NULL
+                     ORDER BY f.name COLLATE NOCASE"
+                ))
+                .map_err(AppError::from)?;
+            let rows = statement
+                .query_map([], map_folder)
+                .map_err(AppError::from)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(AppError::from)?;
+            Ok(rows)
+        })
+    }
+
+    fn create_folder(&self, name: &str, now: Timestamp) -> AppResult<Folder> {
+        let name = validate_label(name, "name")?;
+        self.database.in_transaction(|transaction| {
+            let id = FolderId::new();
+            transaction
+                .execute(
+                    "INSERT INTO folders (id, name, created_at, updated_at)
+                          VALUES (?1, ?2, ?3, ?3)",
+                    params![id, name, now.as_millis()],
+                )
+                .map_err(AppError::from)?;
+            transaction
+                .query_row(
+                    &format!("{SELECT_FOLDERS} WHERE f.id = ?1"),
+                    [id],
+                    map_folder,
+                )
+                .map_err(AppError::from)
+        })
+    }
+
+    fn delete_folder(&self, id: FolderId) -> AppResult<()> {
+        let now = self.clock.now();
+        self.database.with_connection(|connection| {
+            // Soft delete, like notes: the folder disappears from the list and
+            // the notes that were in it stay exactly where they were.
+            connection
+                .execute(
+                    "UPDATE folders SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2",
+                    params![now.as_millis(), id],
+                )
+                .map(|_| ())
+                .map_err(AppError::from)
+        })
+    }
+
+    fn folders_of_note(&self, note_id: NoteId) -> AppResult<Vec<Folder>> {
+        self.database.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(&format!(
+                    "{SELECT_FOLDERS}
+                      JOIN note_folders nf ON nf.folder_id = f.id
+                     WHERE nf.note_id = ?1 AND f.deleted_at IS NULL
+                     ORDER BY f.name COLLATE NOCASE"
+                ))
+                .map_err(AppError::from)?;
+            let rows = statement
+                .query_map([note_id], map_folder)
+                .map_err(AppError::from)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(AppError::from)?;
+            Ok(rows)
+        })
+    }
+
+    fn set_note_folders(
+        &self,
+        note_id: NoteId,
+        folders: &[FolderId],
+        now: Timestamp,
+    ) -> AppResult<()> {
+        self.database.in_transaction(|transaction| {
+            transaction
+                .execute("DELETE FROM note_folders WHERE note_id = ?1", [note_id])
+                .map_err(AppError::from)?;
+            for folder in folders {
+                transaction
+                    .execute(
+                        "INSERT OR IGNORE INTO note_folders (note_id, folder_id, created_at)
+                              VALUES (?1, ?2, ?3)",
+                        params![note_id, folder, now.as_millis()],
+                    )
+                    .map_err(AppError::from)?;
+            }
+            Ok(())
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::domain::clock::FixedClock;
+    use crate::domain::notes::{NoteDraft, NoteRepository};
+    use crate::infrastructure::sqlite::SqliteNoteRepository;
+
+    use super::*;
+
+    fn fixture() -> (SqliteOrganisationRepository, NoteId, SharedClock) {
+        let clock: SharedClock = Arc::new(FixedClock::new(Timestamp::from_millis(1_000)));
+        let database = Arc::new(Database::open_in_memory(1_000).expect("opens"));
+        let note = SqliteNoteRepository::new(Arc::clone(&database), Arc::clone(&clock))
+            .create(NoteDraft {
+                title: Some("Заметка".into()),
+                ..NoteDraft::default()
+            })
+            .expect("creates note");
+        (
+            SqliteOrganisationRepository::new(database, Arc::clone(&clock)),
+            note.id,
+            clock,
+        )
+    }
+
+    #[test]
+    fn a_tag_typed_in_another_case_is_the_same_tag() {
+        let (repository, _note, clock) = fixture();
+
+        let first = repository
+            .ensure_tag("Работа", clock.now())
+            .expect("creates");
+        let second = repository.ensure_tag("работа", clock.now()).expect("finds");
+
+        assert_eq!(first.id, second.id, "one tag, not two that look alike");
+        assert_eq!(repository.tags().expect("reads").len(), 1);
+    }
+
+    #[test]
+    fn setting_the_tags_of_a_note_replaces_rather_than_adds() {
+        let (repository, note, clock) = fixture();
+        let work = repository
+            .ensure_tag("работа", clock.now())
+            .expect("creates");
+        let home = repository.ensure_tag("дом", clock.now()).expect("creates");
+
+        repository
+            .set_note_tags(note, &[work.id, home.id], clock.now())
+            .expect("sets");
+        repository
+            .set_note_tags(note, &[home.id], clock.now())
+            .expect("replaces");
+
+        let on_note = repository.tags_of_note(note).expect("reads");
+        assert_eq!(on_note.len(), 1);
+        assert_eq!(on_note[0].name, "дом");
+    }
+
+    #[test]
+    fn a_tag_counts_only_the_notes_that_still_exist() {
+        let (repository, note, clock) = fixture();
+        let tag = repository
+            .ensure_tag("работа", clock.now())
+            .expect("creates");
+        repository
+            .set_note_tags(note, &[tag.id], clock.now())
+            .expect("sets");
+
+        assert_eq!(repository.tags().expect("reads")[0].usage_count, 1);
+    }
+
+    #[test]
+    fn deleting_a_tag_leaves_the_notes_alone() {
+        let (repository, note, clock) = fixture();
+        let tag = repository
+            .ensure_tag("работа", clock.now())
+            .expect("creates");
+        repository
+            .set_note_tags(note, &[tag.id], clock.now())
+            .expect("sets");
+
+        repository.delete_tag(tag.id).expect("deletes");
+
+        assert!(repository.tags().expect("reads").is_empty());
+        assert!(
+            repository.tags_of_note(note).expect("reads").is_empty(),
+            "the label is gone from the note, but the note is not"
+        );
+    }
+
+    #[test]
+    fn a_deleted_folder_leaves_the_list_without_taking_its_notes() {
+        let (repository, note, clock) = fixture();
+        let folder = repository
+            .create_folder("Проекты", clock.now())
+            .expect("creates");
+        repository
+            .set_note_folders(note, &[folder.id], clock.now())
+            .expect("files");
+
+        repository.delete_folder(folder.id).expect("deletes");
+
+        assert!(repository.folders().expect("reads").is_empty());
+        assert!(repository.folders_of_note(note).expect("reads").is_empty());
+    }
+
+    #[test]
+    fn a_folder_without_a_name_is_refused() {
+        let (repository, _note, clock) = fixture();
+        let error = repository
+            .create_folder("   ", clock.now())
+            .expect_err("must refuse");
+        assert_eq!(error.code(), "validation_required");
+    }
+}

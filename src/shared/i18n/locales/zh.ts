@@ -70,6 +70,16 @@ export const zh: Dictionary = {
   "reminder.repeat.monthly": "每月",
   "reminder.repeat.yearly": "每年",
 
+  "filing.title": "文件夹与标签",
+  "filing.folders": "文件夹",
+  "filing.tags": "标签",
+  "filing.newFolder": "新建文件夹",
+  "filing.addFolder": "创建文件夹",
+  "filing.newTag": "新建标签",
+  "filing.addTag": "创建标签",
+  "filing.open": "这条笔记的文件夹和标签",
+  "filing.all": "全部",
+
   "appIcon.title": "应用图标",
   "appIcon.hint": "启动器可能不会立刻更新图标——关闭并重新打开应用列表通常就好了。",
 

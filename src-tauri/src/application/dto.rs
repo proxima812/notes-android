@@ -486,6 +486,42 @@ impl From<crate::application::app_icons::AppIconCatalog> for AppIconCatalogDto {
     }
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagDto {
+    pub id: String,
+    pub name: String,
+    pub usage_count: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderDto {
+    pub id: String,
+    pub name: String,
+    pub note_count: i64,
+}
+
+impl From<crate::domain::organisation::Tag> for TagDto {
+    fn from(tag: crate::domain::organisation::Tag) -> Self {
+        Self {
+            id: tag.id.to_string(),
+            name: tag.name,
+            usage_count: tag.usage_count,
+        }
+    }
+}
+
+impl From<crate::domain::organisation::Folder> for FolderDto {
+    fn from(folder: crate::domain::organisation::Folder) -> Self {
+        Self {
+            id: folder.id.to_string(),
+            name: folder.name,
+            note_count: folder.note_count,
+        }
+    }
+}
+
 /// What a backup or restore did, as the settings screen reports it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

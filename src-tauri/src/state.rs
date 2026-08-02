@@ -9,12 +9,14 @@ use std::sync::Arc;
 
 use crate::application::app_icons::AppIconUseCases;
 use crate::application::backup::BackupUseCases;
+use crate::application::organisation::OrganisationUseCases;
 use crate::application::use_cases::{NoteUseCases, ReminderUseCases, SearchUseCases};
 use crate::domain::clock::{SharedClock, SystemClock};
 use crate::error::AppResult;
 use crate::infrastructure::sqlite::{
     Database, SqliteBackupArchive, SqliteBackupRepository, SqliteNoteRepository,
-    SqliteReminderRepository, SqliteSearchRepository, SqliteSettingsRepository,
+    SqliteOrganisationRepository, SqliteReminderRepository, SqliteSearchRepository,
+    SqliteSettingsRepository,
 };
 use crate::platform::{AlarmClock, AppIconSwitch, DocumentStore};
 
@@ -27,6 +29,7 @@ pub struct AppState {
     pub search: Arc<SearchUseCases>,
     pub backup: Arc<BackupUseCases>,
     pub app_icons: Arc<AppIconUseCases>,
+    pub organisation: Arc<OrganisationUseCases>,
     pub database: Arc<Database>,
     pub clock: SharedClock,
 }
@@ -97,6 +100,13 @@ impl AppState {
         ));
 
         Ok(Self {
+            organisation: Arc::new(OrganisationUseCases::new(
+                Arc::new(SqliteOrganisationRepository::new(
+                    Arc::clone(&database),
+                    Arc::clone(&clock),
+                )),
+                Arc::clone(&clock),
+            )),
             app_icons: Arc::new(AppIconUseCases::new(icons, settings)),
             backup,
             notes: Arc::new(NoteUseCases::new(note_repository)),

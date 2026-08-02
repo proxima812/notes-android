@@ -70,6 +70,16 @@ export const tt: Dictionary = {
   "reminder.repeat.monthly": "Һәр ай",
   "reminder.repeat.yearly": "Һәр ел",
 
+  "filing.title": "Папкалар һәм теглар",
+  "filing.folders": "Папкалар",
+  "filing.tags": "Теглар",
+  "filing.newFolder": "Яңа папка",
+  "filing.addFolder": "Папка булдыру",
+  "filing.newTag": "Яңа тег",
+  "filing.addTag": "Тег булдыру",
+  "filing.open": "Язманың папкалары һәм теглары",
+  "filing.all": "Барысы",
+
   "appIcon.title": "Кушымта иконкасы",
   "appIcon.hint": "Лаунчер иконканы шунда ук яңартмаска мөмкин — кушымталар исемлеген ябып, кабат ачыгыз.",
 

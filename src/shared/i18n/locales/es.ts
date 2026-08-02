@@ -70,6 +70,16 @@ export const es: Dictionary = {
   "reminder.repeat.monthly": "Cada mes",
   "reminder.repeat.yearly": "Cada año",
 
+  "filing.title": "Carpetas y etiquetas",
+  "filing.folders": "Carpetas",
+  "filing.tags": "Etiquetas",
+  "filing.newFolder": "Carpeta nueva",
+  "filing.addFolder": "Crear carpeta",
+  "filing.newTag": "Etiqueta nueva",
+  "filing.addTag": "Crear etiqueta",
+  "filing.open": "Carpetas y etiquetas de esta nota",
+  "filing.all": "Todas",
+
   "appIcon.title": "Icono de la aplicación",
   "appIcon.hint": "El lanzador puede tardar un momento en actualizarse; cerrar y volver a abrir la lista de aplicaciones suele bastar.",
 

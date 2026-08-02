@@ -17,8 +17,9 @@ use crate::state::AppState;
 
 use super::dto::{
     AppIconCatalogDto, BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest,
-    ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, ReminderDto, ReminderSoundCatalogDto,
-    SearchHitDto, SearchRequest, UpdateNoteRequest, UpsertReminderRequest,
+    FolderDto, ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, ReminderDto,
+    ReminderSoundCatalogDto, SearchHitDto, SearchRequest, TagDto, UpdateNoteRequest,
+    UpsertReminderRequest,
 };
 use super::use_cases::move_note_to_trash;
 
@@ -254,6 +255,119 @@ pub async fn backup_latest(
         backup
             .latest()
             .map(|record| record.map(BackupRecordDto::from))
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn tags_list(state: State<'_, AppState>) -> Result<CommandResult<Vec<TagDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .tags()
+            .map(|tags| tags.into_iter().map(TagDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn tags_ensure(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<CommandResult<TagDto>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || organisation.ensure_tag(&name).map(TagDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn tags_delete(state: State<'_, AppState>, id: String) -> Result<CommandResult<()>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || organisation.delete_tag(&id)).await)
+}
+
+#[tauri::command]
+pub async fn tags_of_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<Vec<TagDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .tags_of_note(&note_id)
+            .map(|tags| tags.into_iter().map(TagDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn tags_set_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+    tags: Vec<String>,
+) -> Result<CommandResult<Vec<TagDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .set_note_tags(&note_id, &tags)
+            .map(|tags| tags.into_iter().map(TagDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn folders_list(state: State<'_, AppState>) -> Result<CommandResult<Vec<FolderDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .folders()
+            .map(|folders| folders.into_iter().map(FolderDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn folders_create(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<CommandResult<FolderDto>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || organisation.create_folder(&name).map(FolderDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn folders_delete(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<CommandResult<()>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || organisation.delete_folder(&id)).await)
+}
+
+#[tauri::command]
+pub async fn folders_of_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<Vec<FolderDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .folders_of_note(&note_id)
+            .map(|folders| folders.into_iter().map(FolderDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn folders_set_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+    folders: Vec<String>,
+) -> Result<CommandResult<Vec<FolderDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .set_note_folders(&note_id, &folders)
+            .map(|folders| folders.into_iter().map(FolderDto::from).collect())
     })
     .await)
 }

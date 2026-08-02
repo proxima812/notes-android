@@ -70,6 +70,16 @@ export const en: Dictionary = {
   "reminder.repeat.monthly": "Every month",
   "reminder.repeat.yearly": "Every year",
 
+  "filing.title": "Folders and tags",
+  "filing.folders": "Folders",
+  "filing.tags": "Tags",
+  "filing.newFolder": "New folder",
+  "filing.addFolder": "Create folder",
+  "filing.newTag": "New tag",
+  "filing.addTag": "Create tag",
+  "filing.open": "Folders and tags of this note",
+  "filing.all": "All",
+
   "appIcon.title": "App icon",
   "appIcon.hint": "The launcher may take a moment to catch up — closing and reopening the app list usually does it.",
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlarmClock, ArrowLeft, Palette } from "lucide-react";
+import { AlarmClock, ArrowLeft, Palette, Tags } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getNote, updateNote, type UpdateNoteRequest } from "@/features/notes/api";
@@ -13,6 +13,7 @@ import {
   saveReminderTimePresets,
   upsertReminderForNote,
 } from "@/features/reminders/api";
+import { NoteFiling } from "@/features/organisation/ui/NoteFiling";
 import { ReminderPanel } from "@/features/reminders/ui/ReminderPanel";
 import type { Reminder } from "@/features/reminders/api";
 import { describeError } from "@/shared/api/errors";
@@ -117,6 +118,7 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
   const [color, setColor] = useState(note.color);
   const [showColors, setShowColors] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
+  const [showFiling, setShowFiling] = useState(false);
 
   const reminders = useQuery({
     queryKey: ["reminders", note.id],
@@ -166,6 +168,9 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
   useBackGuard(showColors, () => {
     setShowColors(false);
   });
+  useBackGuard(showFiling, () => {
+    setShowFiling(false);
+  });
 
   const onBody = useCallback(
     (snapshot: EditorSnapshot): void => {
@@ -210,6 +215,18 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
           }`}
         >
           <AlarmClock className="size-5" />
+        </button>
+
+        <button
+          type="button"
+          aria-label={t("filing.open")}
+          aria-pressed={showFiling}
+          onClick={() => {
+            setShowFiling((open) => !open);
+          }}
+          className="text-content flex size-11 shrink-0 items-center justify-center rounded-full"
+        >
+          <Tags className="size-5" />
         </button>
 
         <button
@@ -275,6 +292,12 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
               }}
             />
           ) : null}
+        </div>
+      )}
+
+      {showFiling && (
+        <div className="px-4 pb-2">
+          <NoteFiling noteId={note.id} />
         </div>
       )}
 

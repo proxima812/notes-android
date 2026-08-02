@@ -70,6 +70,16 @@ export const kk: Dictionary = {
   "reminder.repeat.monthly": "Ай сайын",
   "reminder.repeat.yearly": "Жыл сайын",
 
+  "filing.title": "Қалталар мен тегтер",
+  "filing.folders": "Қалталар",
+  "filing.tags": "Тегтер",
+  "filing.newFolder": "Жаңа қалта",
+  "filing.addFolder": "Қалта жасау",
+  "filing.newTag": "Жаңа тег",
+  "filing.addTag": "Тег жасау",
+  "filing.open": "Жазбаның қалталары мен тегтері",
+  "filing.all": "Барлығы",
+
   "appIcon.title": "Қолданба белгішесі",
   "appIcon.hint": "Лаунчер белгішені бірден жаңартпауы мүмкін — қолданбалар тізімін жауып, қайта ашыңыз.",
 

@@ -84,6 +84,16 @@ export const ru = {
   "reminder.repeat.monthly": "Каждый месяц",
   "reminder.repeat.yearly": "Каждый год",
 
+  "filing.title": "Папки и теги",
+  "filing.folders": "Папки",
+  "filing.tags": "Теги",
+  "filing.newFolder": "Новая папка",
+  "filing.addFolder": "Создать папку",
+  "filing.newTag": "Новый тег",
+  "filing.addTag": "Создать тег",
+  "filing.open": "Папки и теги заметки",
+  "filing.all": "Все",
+
   "appIcon.title": "Иконка приложения",
   "appIcon.hint": "Лаунчер может обновить иконку не сразу — иногда нужно свернуть и снова открыть список приложений.",
 
