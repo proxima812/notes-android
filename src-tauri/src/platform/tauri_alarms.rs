@@ -46,6 +46,21 @@ impl<R: Runtime> AlarmClock for TauriAlarmClock<R> {
             })
     }
 
+    fn cancel_all(&self) -> AppResult<()> {
+        self.app
+            .reminders()
+            .cancel_all()
+            .map(|response| {
+                tracing::info!(cancelled = response.cancelled, "alarms taken back");
+            })
+            .map_err(|error| {
+                PlatformError::PluginCall {
+                    reason: error.to_string(),
+                }
+                .into()
+            })
+    }
+
     fn cancel(&self, request_code: i32) -> AppResult<()> {
         self.app
             .reminders()

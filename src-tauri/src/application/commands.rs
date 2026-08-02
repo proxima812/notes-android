@@ -16,9 +16,9 @@ use crate::error::{AppError, AppResult, PlatformError};
 use crate::state::AppState;
 
 use super::dto::{
-    CommandResult, CreateNoteRequest, ListNotesRequest, NoteDto, NoteSummaryDto, PageDto,
-    ReminderDto, ReminderSoundCatalogDto, SearchHitDto, SearchRequest, UpdateNoteRequest,
-    UpsertReminderRequest,
+    BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest, ListNotesRequest, NoteDto,
+    NoteSummaryDto, PageDto, ReminderDto, ReminderSoundCatalogDto, SearchHitDto, SearchRequest,
+    UpdateNoteRequest, UpsertReminderRequest,
 };
 use super::use_cases::move_note_to_trash;
 
@@ -198,6 +198,41 @@ pub async fn reminder_sounds_list(
 ) -> Result<CommandResult<ReminderSoundCatalogDto>, ()> {
     let reminders = Arc::clone(&state.reminders);
     Ok(blocking(move || reminders.sound_catalog().map(ReminderSoundCatalogDto::from)).await)
+}
+
+/// Writes a snapshot and asks the user where to keep it.
+///
+/// The picker blocks until the user decides, which is why this — like every
+/// other command here — runs on a blocking task rather than on the thread
+/// serving the WebView.
+#[tauri::command]
+pub async fn backup_export(
+    state: State<'_, AppState>,
+    timezone: String,
+) -> Result<CommandResult<BackupOutcomeDto>, ()> {
+    let backup = Arc::clone(&state.backup);
+    Ok(blocking(move || backup.export(&timezone).map(BackupOutcomeDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn backup_import(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<BackupOutcomeDto>, ()> {
+    let backup = Arc::clone(&state.backup);
+    Ok(blocking(move || backup.import().map(BackupOutcomeDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn backup_latest(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<Option<BackupRecordDto>>, ()> {
+    let backup = Arc::clone(&state.backup);
+    Ok(blocking(move || {
+        backup
+            .latest()
+            .map(|record| record.map(BackupRecordDto::from))
+    })
+    .await)
 }
 
 #[tauri::command]

@@ -446,6 +446,28 @@ pub struct ReminderSoundDto {
     pub label: String,
 }
 
+/// What a backup or restore did, as the settings screen reports it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupOutcomeDto {
+    /// False when the user backed out of the picker, which the screen shows as
+    /// nothing having happened rather than as a failure.
+    pub completed: bool,
+    pub file_name: Option<String>,
+    pub note_count: i64,
+    pub reminder_count: i64,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupRecordDto {
+    pub file_name: String,
+    pub size_bytes: u64,
+    pub note_count: i64,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReminderSoundCatalogDto {
@@ -468,6 +490,29 @@ impl From<ReminderView> for ReminderDto {
             effective_sound_id: view.effective_sound.id.to_owned(),
             effective_sound_label: view.effective_sound.label.to_owned(),
             is_exact: scheduled.occurrence.is_exact,
+        }
+    }
+}
+
+impl From<crate::application::backup::BackupOutcome> for BackupOutcomeDto {
+    fn from(outcome: crate::application::backup::BackupOutcome) -> Self {
+        Self {
+            completed: outcome.completed,
+            file_name: outcome.file_name,
+            note_count: outcome.note_count,
+            reminder_count: outcome.reminder_count,
+            size_bytes: outcome.size_bytes,
+        }
+    }
+}
+
+impl From<crate::domain::backup::BackupRecord> for BackupRecordDto {
+    fn from(record: crate::domain::backup::BackupRecord) -> Self {
+        Self {
+            file_name: record.file_name,
+            size_bytes: record.size_bytes,
+            note_count: record.note_count,
+            created_at: record.created_at.as_millis(),
         }
     }
 }

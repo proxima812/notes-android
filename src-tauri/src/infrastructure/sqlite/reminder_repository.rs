@@ -278,6 +278,27 @@ impl ReminderRepository for SqliteReminderRepository {
         })
     }
 
+    fn active_scheduled(&self, now: Timestamp) -> AppResult<Vec<ScheduledReminder>> {
+        self.database.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(&format!(
+                    "{SELECT_SCHEDULED}
+                     WHERE r.deleted_at IS NULL
+                       AND r.is_enabled = 1
+                       AND o.state IN ('scheduled', 'snoozed')
+                       AND o.occurrence_at > ?1
+                     ORDER BY o.occurrence_at"
+                ))
+                .map_err(AppError::from)?;
+            let rows = statement
+                .query_map(params![now.as_millis()], map_scheduled)
+                .map_err(AppError::from)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(AppError::from)?;
+            Ok(rows)
+        })
+    }
+
     fn default_sound_id(&self) -> AppResult<Option<String>> {
         self.read_setting(DEFAULT_SOUND_SETTING_KEY)
     }

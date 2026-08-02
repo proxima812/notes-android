@@ -315,7 +315,7 @@ fn labels(presets: &[time_presets::TimePreset]) -> Vec<String> {
     presets.iter().map(|preset| preset.label()).collect()
 }
 
-fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> Alarm {
+pub(super) fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> Alarm {
     Alarm {
         occurrence_id: scheduled.occurrence.id.to_string(),
         note_id: scheduled.reminder.note_id.to_string(),
@@ -425,6 +425,7 @@ mod tests {
     struct FakeAlarmClock {
         scheduled: parking_lot::Mutex<Vec<Alarm>>,
         cancelled: parking_lot::Mutex<Vec<i32>>,
+        cancelled_everything: parking_lot::Mutex<bool>,
         launch_target: parking_lot::Mutex<Option<String>>,
         notifications_granted: bool,
         exact: bool,
@@ -438,6 +439,11 @@ mod tests {
 
         fn cancel(&self, request_code: i32) -> AppResult<()> {
             self.cancelled.lock().push(request_code);
+            Ok(())
+        }
+
+        fn cancel_all(&self) -> AppResult<()> {
+            *self.cancelled_everything.lock() = true;
             Ok(())
         }
 

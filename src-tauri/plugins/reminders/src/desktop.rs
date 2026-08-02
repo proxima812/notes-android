@@ -2,8 +2,8 @@ use serde::de::DeserializeOwned;
 use tauri::{plugin::PluginApi, AppHandle, Runtime};
 
 use crate::models::{
-    CancelRequest, LaunchTarget, PermissionRequestResponse, ReminderPermissions, ScheduleRequest,
-    ScheduleResponse,
+    CancelAllResponse, CancelRequest, LaunchTarget, PermissionRequestResponse, ReminderPermissions,
+    ScheduleRequest, ScheduleResponse,
 };
 
 /// The desktop half exists so the crate compiles on the development machine —
@@ -31,6 +31,16 @@ impl<R: Runtime> Reminders<R> {
     /// Always: there is no alarm clock to talk to off-device.
     pub fn cancel(&self, _request: CancelRequest) -> crate::Result<()> {
         Err(crate::Error::Unsupported)
+    }
+
+    /// Off-device there is nothing armed, so taking everything back succeeds
+    /// having done nothing. Refusing here would make restoring a backup fail on
+    /// the development machine for no reason.
+    ///
+    /// # Errors
+    /// Never.
+    pub fn cancel_all(&self) -> crate::Result<CancelAllResponse> {
+        Ok(CancelAllResponse::default())
     }
 
     /// Off-device nothing can tap a notification, so there is never a target.

@@ -126,6 +126,27 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(JSObject())
     }
 
+    /**
+     * Cancels every alarm this app has armed.
+     *
+     * Restoring a backup replaces the reminders the core knows about, which
+     * leaves the OS holding alarms for occurrences that no longer exist. The
+     * journal is the only record of those, so it is also the only way to take
+     * them back.
+     */
+    @Command
+    fun cancelAll(invoke: Invoke) {
+        var cancelled = 0
+        for (alarm in AlarmStore.all(activity)) {
+            AlarmScheduler.cancel(activity, alarm.requestCode)
+            cancelled++
+        }
+
+        val result = JSObject()
+        result.put("cancelled", cancelled)
+        invoke.resolve(result)
+    }
+
     @Command
     fun permissionState(invoke: Invoke) {
         // `areNotificationsEnabled` is the truthful answer: it also covers the

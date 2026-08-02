@@ -27,6 +27,12 @@ pub trait ReminderRepository: Send + Sync {
         cancel: &mut dyn FnMut(&ScheduledReminder) -> AppResult<()>,
     ) -> AppResult<Option<ScheduledReminder>>;
 
+    /// Every reminder that is still due, across all notes.
+    ///
+    /// Restoring a backup replaces the whole set, so re-arming has to start
+    /// from what the database now says rather than from what was armed before.
+    fn active_scheduled(&self, now: Timestamp) -> AppResult<Vec<ScheduledReminder>>;
+
     fn default_sound_id(&self) -> AppResult<Option<String>>;
 
     /// The stored preset times, still in the form they were written in.

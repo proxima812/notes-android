@@ -5,8 +5,8 @@ use tauri::{
 };
 
 use crate::models::{
-    CancelRequest, Empty, LaunchTarget, PermissionRequestResponse, ReminderPermissions,
-    RequestPermissionArgs, ScheduleRequest, ScheduleResponse,
+    CancelAllResponse, CancelRequest, Empty, LaunchTarget, PermissionRequestResponse,
+    ReminderPermissions, RequestPermissionArgs, ScheduleRequest, ScheduleResponse,
 };
 
 /// Alias declared on the Kotlin plugin for `POST_NOTIFICATIONS`.
@@ -45,6 +45,19 @@ impl<R: Runtime> Reminders<R> {
         self.0
             .run_mobile_plugin::<Empty>("cancel", request)
             .map(|_| ())
+            .map_err(Into::into)
+    }
+
+    /// Takes back every alarm the plugin has armed.
+    ///
+    /// Used when restoring a backup replaces the reminders wholesale, so the OS
+    /// stops holding alarms for occurrences that no longer exist.
+    ///
+    /// # Errors
+    /// Fails when the Kotlin side cannot reach `AlarmManager`.
+    pub fn cancel_all(&self) -> crate::Result<CancelAllResponse> {
+        self.0
+            .run_mobile_plugin("cancelAll", ())
             .map_err(Into::into)
     }
 

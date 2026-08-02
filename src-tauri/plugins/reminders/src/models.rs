@@ -54,6 +54,13 @@ pub struct CancelRequest {
     pub request_code: i32,
 }
 
+/// How many alarms were taken back, for the log.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelAllResponse {
+    pub cancelled: u32,
+}
+
 /// Mirrors the states Tauri's Android permission layer reports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
