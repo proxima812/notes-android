@@ -182,6 +182,16 @@ pub async fn reminders_delete_for_note(
     Ok(blocking(move || reminders.delete_for_note(&note_id).map(|_| ())).await)
 }
 
+/// Note a notification tap asked to open, or nothing if the app was opened the
+/// usual way. Answering clears it, so asking again returns nothing.
+#[tauri::command]
+pub async fn reminders_take_launch_target(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<Option<String>>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.take_launch_target()).await)
+}
+
 #[tauri::command]
 pub async fn reminder_sounds_list(
     state: State<'_, AppState>,

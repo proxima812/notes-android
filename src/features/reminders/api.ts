@@ -99,6 +99,20 @@ export async function deleteReminderForNote(noteIdValue: NoteId): Promise<null> 
   });
 }
 
+/**
+ * Collects the note a notification tap asked to open.
+ *
+ * The core clears the target as it answers, so this returns a note once per tap
+ * and `null` on every other call — which is why it is safe to ask on every
+ * start and every return from the background.
+ */
+export async function takeReminderLaunchTarget(): Promise<NoteId | null> {
+  return callCommand(
+    "reminders_take_launch_target",
+    brandedNoteId.nullable(),
+  );
+}
+
 export async function listReminderSounds(): Promise<ReminderSoundCatalog> {
   return callCommand("reminder_sounds_list", reminderSoundCatalogSchema);
 }

@@ -2,7 +2,7 @@ use serde::de::DeserializeOwned;
 use tauri::{plugin::PluginApi, AppHandle, Runtime};
 
 use crate::models::{
-    CancelRequest, PermissionRequestResponse, ReminderPermissions, ScheduleRequest,
+    CancelRequest, LaunchTarget, PermissionRequestResponse, ReminderPermissions, ScheduleRequest,
     ScheduleResponse,
 };
 
@@ -31,6 +31,18 @@ impl<R: Runtime> Reminders<R> {
     /// Always: there is no alarm clock to talk to off-device.
     pub fn cancel(&self, _request: CancelRequest) -> crate::Result<()> {
         Err(crate::Error::Unsupported)
+    }
+
+    /// Off-device nothing can tap a notification, so there is never a target.
+    ///
+    /// This one answers rather than refusing: the app asks on every start, and
+    /// a hard error would turn "opened normally" into a failure on the
+    /// development machine.
+    ///
+    /// # Errors
+    /// Never.
+    pub fn take_launch_target(&self) -> crate::Result<LaunchTarget> {
+        Ok(LaunchTarget::default())
     }
 
     /// # Errors

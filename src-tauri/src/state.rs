@@ -96,6 +96,10 @@ mod tests {
             Ok(())
         }
 
+        fn take_launch_target(&self) -> AppResult<Option<String>> {
+            Ok(None)
+        }
+
         fn permissions(&self) -> AppResult<AlarmPermissions> {
             Ok(AlarmPermissions {
                 notifications_granted: true,

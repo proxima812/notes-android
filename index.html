@@ -2,9 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/png" href="/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tauri + React + Typescript</title>
+    <!-- The two subsets almost every session needs. They are found only after the
+         CSS parses otherwise, which costs the first screen a frame of fallback
+         text; the other six subsets stay on demand. -->
+    <link rel="preload" href="/fonts/rubik-latin-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/rubik-cyrillic-normal.woff2" as="font" type="font/woff2" crossorigin />
+    <title>xima.keeps</title>
   </head>
 
   <body>

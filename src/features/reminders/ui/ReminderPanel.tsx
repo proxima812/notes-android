@@ -1,6 +1,8 @@
 import { X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { useT } from "@/shared/i18n";
+
 import type { Reminder } from "../api";
 
 interface SoundCatalog {
@@ -57,6 +59,7 @@ export function ReminderPanel({
   onDelete,
   onClose,
 }: ReminderPanelProps): React.JSX.Element {
+  const t = useT();
   const initialDateTime = initialParts(initial);
   const [title, setTitle] = useState(initial?.title ?? noteTitle);
   const [date, setDate] = useState(initialDateTime.date);
@@ -77,15 +80,15 @@ export function ReminderPanel({
     event.preventDefault();
     const scheduledAt = localDateTimeToMillis(date, time);
     if (!Number.isFinite(scheduledAt)) {
-      setLocalError("Укажите дату и время.");
+      setLocalError(t("reminder.errorWhen"));
       return;
     }
     if (scheduledAt <= Date.now()) {
-      setLocalError("Указанное время уже прошло.");
+      setLocalError(t("reminder.errorPast"));
       return;
     }
     if (title.trim().length === 0) {
-      setLocalError("Добавьте название напоминания.");
+      setLocalError(t("reminder.errorTitle"));
       return;
     }
 
@@ -95,14 +98,14 @@ export function ReminderPanel({
 
   return (
     <section
-      aria-label="Напоминание"
+      aria-label={t("reminder.title")}
       className="bg-surface-sunken border-border-subtle rounded-2xl border p-4"
     >
       <div className="mb-3 flex min-h-11 items-center gap-3">
-        <h2 className="text-content flex-1 text-base font-semibold">Напоминание</h2>
+        <h2 className="text-content flex-1 text-base font-semibold">{t("reminder.title")}</h2>
         <button
           type="button"
-          aria-label="Закрыть напоминание"
+          aria-label={t("reminder.close")}
           onClick={onClose}
           className="text-content-muted flex size-11 shrink-0 items-center justify-center rounded-full"
         >
@@ -112,7 +115,7 @@ export function ReminderPanel({
 
       <form className="space-y-4" onSubmit={submit}>
         <label className="text-content-muted block text-sm">
-          Название
+          {t("reminder.name")}
           <input
             type="text"
             value={title}
@@ -126,7 +129,7 @@ export function ReminderPanel({
 
         <div className="grid grid-cols-2 gap-3">
           <label className="text-content-muted block text-sm">
-            Дата
+            {t("reminder.date")}
             <input
               type="date"
               value={date}
@@ -138,7 +141,7 @@ export function ReminderPanel({
             />
           </label>
           <label className="text-content-muted block text-sm">
-            Время
+            {t("reminder.time")}
             <input
               type="time"
               value={time}
@@ -152,7 +155,7 @@ export function ReminderPanel({
         </div>
 
         <fieldset>
-          <legend className="text-content-muted mb-1 text-sm">Звук</legend>
+          <legend className="text-content-muted mb-1 text-sm">{t("reminder.sound")}</legend>
           <div className="space-y-1">
             <label className="text-content flex min-h-11 items-center gap-3 rounded-xl px-2">
               <input
@@ -165,7 +168,7 @@ export function ReminderPanel({
                 }}
                 className="size-5 accent-accent"
               />
-              <span className="text-sm">По умолчанию · {defaultSoundLabel(sounds)}</span>
+              <span className="text-sm">{t("reminder.defaultSound", { label: defaultSoundLabel(sounds) })}</span>
             </label>
             {sounds.items.map((item) => (
               <label
@@ -190,7 +193,7 @@ export function ReminderPanel({
 
         {initial?.isExact === false && (
           <p className="text-content-muted text-sm">
-            Android может доставить это напоминание с небольшой задержкой.
+            {t("reminder.delay")}
           </p>
         )}
 
@@ -206,7 +209,7 @@ export function ReminderPanel({
             disabled={busy}
             className="bg-accent text-accent-content min-h-11 flex-1 rounded-xl px-4 text-sm font-medium disabled:opacity-40"
           >
-            Сохранить напоминание
+            {t("reminder.save")}
           </button>
           {initial !== null && (
             <button
@@ -215,7 +218,7 @@ export function ReminderPanel({
               onClick={onDelete}
               className="text-danger min-h-11 rounded-xl px-4 text-sm font-medium disabled:opacity-40"
             >
-              Удалить
+              {t("reminder.delete")}
             </button>
           )}
         </div>

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Search } from "lucide-react";
+import { LayoutTemplate, Plus, Search } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -13,19 +13,32 @@ import {
   type NoteScope,
   type SearchHit,
 } from "@/features/notes/api";
+import { buildDoc, buildText, type NoteTemplate } from "@/features/notes/templates";
 import { NoteCard } from "@/features/notes/ui/NoteCard";
+import { TemplatePicker } from "@/features/notes/ui/TemplatePicker";
+import { ThemeSwitcher } from "@/features/settings/ui/ThemeSwitcher";
 import { describeError } from "@/shared/api/errors";
+import { useT, type StringKey } from "@/shared/i18n";
+import { useBackGuard } from "@/shared/lib/useBackGuard";
 import type { NoteId } from "@/shared/types/ids";
+import {
+  FLOATING_BUTTON_PRIMARY,
+  FLOATING_BUTTON_SECONDARY,
+  FLOATING_RIGHT_PRIMARY,
+  FLOATING_RIGHT_THIRD,
+} from "@/shared/ui/floatingButton";
 
 const TABS = [
-  { scope: "active", label: "Заметки" },
-  { scope: "archived", label: "Архив" },
-] as const satisfies readonly { scope: NoteScope; label: string }[];
+  { scope: "active", labelKey: "library.tabActive" },
+  { scope: "archived", labelKey: "library.tabArchived" },
+] as const satisfies readonly { scope: NoteScope; labelKey: StringKey }[];
 
 function SearchResult({ hit }: { readonly hit: SearchHit }): React.JSX.Element {
+  const t = useT();
+
   return (
     <li className="bg-surface-raised border-border-subtle rounded-2xl border p-4">
-      <p className="truncate font-medium">{hit.title === "" ? "Без названия" : hit.title}</p>
+      <p className="truncate font-medium">{hit.title === "" ? t("common.untitled") : hit.title}</p>
       <p className="text-content-muted mt-1 text-sm">
         {splitHighlights(hit.snippet).map((part, index) =>
           part.highlighted ? (
@@ -48,12 +61,22 @@ export function LibraryPage({
   readonly onOpen: (id: NoteId) => void;
 }): React.JSX.Element {
   const client = useQueryClient();
+  const t = useT();
   const [scope, setScope] = useState<NoteScope>("active");
   const [query, setQuery] = useState("");
+  const [templatesOpen, setTemplatesOpen] = useState(false);
 
   const notes = useQuery({
     queryKey: ["notes", scope],
     queryFn: () => listNotes({ scope, limit: 100 }),
+  });
+
+  // The badge has to be right even while the active tab is showing, so the
+  // count is its own query rather than a read off `notes.data.total`. `limit: 1`
+  // keeps it cheap: only the total is used.
+  const archivedCount = useQuery({
+    queryKey: ["notes", "archived", "count"],
+    queryFn: async () => (await listNotes({ scope: "archived", limit: 1 })).total,
   });
 
   const results = useQuery({
@@ -75,6 +98,23 @@ export function LibraryPage({
     },
   });
 
+  // A template is an ordinary note that simply arrives pre-filled, so it goes
+  // through the same create command and lands in the same editor.
+  const addFromTemplate = useMutation({
+    mutationFn: (template: NoteTemplate) =>
+      createNote({
+        noteType: template.noteType,
+        title: template.title,
+        contentJson: buildDoc(template),
+        contentText: buildText(template),
+      }),
+    onSuccess: (note) => {
+      setTemplatesOpen(false);
+      refresh();
+      onOpen(note.id);
+    },
+  });
+
   // One mutation per row would remount on every list refetch, so the row id is
   // carried in the variables and used to grey out just that card.
   const archive = useMutation({
@@ -89,6 +129,10 @@ export function LibraryPage({
   });
 
   const searching = query.trim().length > 0;
+
+  useBackGuard(templatesOpen, () => {
+    setTemplatesOpen(false);
+  });
 
   let busyId: NoteId | null = null;
   if (archive.isPending) {
@@ -107,19 +151,21 @@ export function LibraryPage({
           onChange={(event) => {
             setQuery(event.target.value);
           }}
-          placeholder="Поиск"
+          placeholder={t("library.search")}
           className="min-h-12 w-full bg-transparent outline-none"
         />
       </label>
 
       {searching ? (
         <section>
-          {results.isPending && <p className="text-content-muted text-sm">Поиск…</p>}
+          {results.isPending && (
+            <p className="text-content-muted text-sm">{t("library.searchInProgress")}</p>
+          )}
           {results.error !== null && (
-            <p className="text-danger text-sm">{describeError(results.error)}</p>
+            <p className="text-danger text-sm">{describeError(results.error, t)}</p>
           )}
           {results.data !== undefined && results.data.items.length === 0 && (
-            <p className="text-content-muted text-sm">Ничего не найдено.</p>
+            <p className="text-content-muted text-sm">{t("library.nothingFound")}</p>
           )}
           <ul className="flex flex-col gap-2">
             {results.data?.items.map((hit) => <SearchResult key={hit.id} hit={hit} />)}
@@ -128,32 +174,45 @@ export function LibraryPage({
       ) : (
         <>
           <div role="tablist" className="bg-surface-sunken flex gap-1 rounded-2xl p-1">
-            {TABS.map((tab) => (
-              <button
-                key={tab.scope}
-                type="button"
-                role="tab"
-                aria-selected={scope === tab.scope}
-                onClick={() => {
-                  setScope(tab.scope);
-                }}
-                className={`min-h-11 flex-1 rounded-xl text-sm font-medium transition-colors ${
-                  scope === tab.scope ? "bg-accent text-accent-content" : "text-content-muted"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+            {TABS.map((tab) => {
+              const selected = scope === tab.scope;
+              const count = tab.scope === "archived" ? (archivedCount.data ?? 0) : 0;
+              return (
+                <button
+                  key={tab.scope}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => {
+                    setScope(tab.scope);
+                  }}
+                  className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-medium transition-colors ${
+                    selected ? "bg-accent text-accent-content" : "text-content-muted"
+                  }`}
+                >
+                  {t(tab.labelKey)}
+                  {count > 0 && (
+                    <span
+                      className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${
+                        selected ? "bg-accent-content/15" : "bg-surface-raised text-content-muted"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           <section>
-            {notes.isPending && <p className="text-content-muted text-sm">Загрузка…</p>}
+            {notes.isPending && <p className="text-content-muted text-sm">{t("common.loading")}</p>}
             {notes.error !== null && (
-              <p className="text-danger text-sm">{describeError(notes.error)}</p>
+              <p className="text-danger text-sm">{describeError(notes.error, t)}</p>
             )}
             {notes.data !== undefined && notes.data.items.length === 0 && (
               <p className="text-content-muted text-sm">
-                {scope === "archived" ? "Архив пуст." : "Пока пусто. Создайте первую заметку."}
+                {scope === "archived" ? t("library.archiveEmpty") : t("library.empty")}
               </p>
             )}
             <ul className="flex flex-col gap-2">
@@ -178,22 +237,48 @@ export function LibraryPage({
         </>
       )}
 
-      {(archive.error ?? remove.error ?? add.error) !== null && (
+      {(archive.error ?? remove.error ?? add.error ?? addFromTemplate.error) !== null && (
         <p className="text-danger text-sm">
-          {describeError(archive.error ?? remove.error ?? add.error)}
+          {describeError(archive.error ?? remove.error ?? add.error ?? addFromTemplate.error, t)}
         </p>
+      )}
+
+      {templatesOpen && (
+        <TemplatePicker
+          busy={addFromTemplate.isPending}
+          onPick={(template) => {
+            addFromTemplate.mutate(template);
+          }}
+          onClose={() => {
+            setTemplatesOpen(false);
+          }}
+        />
       )}
 
       <button
         type="button"
-        aria-label="Новая заметка"
+        aria-label={t("library.templates")}
+        aria-expanded={templatesOpen}
+        onClick={() => {
+          setTemplatesOpen(true);
+        }}
+        className={`${FLOATING_BUTTON_SECONDARY} ${FLOATING_RIGHT_THIRD}`}
+      >
+        <LayoutTemplate className="size-5" />
+      </button>
+
+      <ThemeSwitcher />
+
+      <button
+        type="button"
+        aria-label={t("library.newNote")}
         onClick={() => {
           add.mutate();
         }}
         disabled={add.isPending}
-        className="bg-accent text-accent-content fixed right-5 bottom-6 flex size-14 items-center justify-center rounded-2xl shadow-lg disabled:opacity-40"
+        className={`${FLOATING_BUTTON_PRIMARY} ${FLOATING_RIGHT_PRIMARY} disabled:opacity-40`}
       >
-        <Plus className="size-6" />
+        <Plus className="size-5" />
       </button>
     </div>
   );

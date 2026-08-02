@@ -3,6 +3,8 @@ package dev.local.organizer.reminders
 import android.Manifest
 import android.app.Activity
 import android.app.AlarmManager
+import android.content.Intent
+import android.webkit.WebView
 import androidx.core.app.NotificationManagerCompat
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
@@ -15,6 +17,7 @@ import app.tauri.plugin.Plugin
 @InvokeArg
 internal class ScheduleArgs {
     var occurrenceId: String = ""
+    var noteId: String = ""
     var requestCode: Int = 0
     var triggerAtMillis: Long = 0
     var title: String = ""
@@ -43,6 +46,46 @@ internal class CancelArgs {
 )
 class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
 
+    /**
+     * Note a notification tap asked to open, waiting to be collected.
+     *
+     * Held here rather than pushed to the WebView because the tap can start the
+     * app cold, long before any JavaScript exists to receive an event.
+     */
+    private var pendingNoteId: String? = null
+
+    override fun load(webView: WebView) {
+        // A cold start: the intent that launched the activity is the tap.
+        capture(activity.intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        // The app was already running. `launchMode` is `singleTask`, so the tap
+        // arrives here instead of through a fresh `onCreate`.
+        capture(intent)
+    }
+
+    private fun capture(intent: Intent?) {
+        if (intent?.action != ReminderIntents.ACTION_OPEN) {
+            return
+        }
+        val noteId = intent.getStringExtra(ReminderIntents.EXTRA_NOTE_ID) ?: return
+        pendingNoteId = noteId
+        // Consumed once. Without this the same note would reopen every time the
+        // app is brought back from the background, because the activity keeps
+        // the intent that started it.
+        intent.removeExtra(ReminderIntents.EXTRA_NOTE_ID)
+    }
+
+    /** Hands the pending note to the core and forgets it. */
+    @Command
+    fun takeLaunchTarget(invoke: Invoke) {
+        val result = JSObject()
+        result.put("noteId", pendingNoteId)
+        pendingNoteId = null
+        invoke.resolve(result)
+    }
+
     @Command
     fun schedule(invoke: Invoke) {
         val args = invoke.parseArgs(ScheduleArgs::class.java)
@@ -61,6 +104,7 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
             val armedExact = AlarmScheduler.schedule(
                 context = activity,
                 occurrenceId = args.occurrenceId,
+                noteId = args.noteId,
                 requestCode = args.requestCode,
                 triggerAtMillis = args.triggerAtMillis,
                 title = args.title,

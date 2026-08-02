@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Accent behind the notification icon.
+
+        Fixed rather than read from the app's theme: the notification is built
+        in a receiver that can run with the process dead, where the user's
+        chosen theme has not been loaded. This is the default theme's green.
+    -->
+    <color name="reminder_accent">#FF00C88C</color>
+</resources>

@@ -19,6 +19,7 @@ internal object AlarmScheduler {
     fun schedule(
         context: Context,
         occurrenceId: String,
+        noteId: String,
         requestCode: Int,
         triggerAtMillis: Long,
         title: String,
@@ -33,7 +34,9 @@ internal object AlarmScheduler {
         val pending = pendingIntent(
             context = context,
             occurrenceId = occurrenceId,
+            noteId = noteId,
             requestCode = requestCode,
+            triggerAtMillis = triggerAtMillis,
             title = title,
             body = body,
             channelId = channelId,
@@ -79,7 +82,9 @@ internal object AlarmScheduler {
     private fun pendingIntent(
         context: Context,
         occurrenceId: String,
+        noteId: String,
         requestCode: Int,
+        triggerAtMillis: Long,
         title: String,
         body: String,
         channelId: String,
@@ -89,7 +94,9 @@ internal object AlarmScheduler {
         val intent = Intent(context, ReminderReceiver::class.java).apply {
             action = ReminderIntents.ACTION_FIRE
             putExtra(ReminderIntents.EXTRA_OCCURRENCE_ID, occurrenceId)
+            putExtra(ReminderIntents.EXTRA_NOTE_ID, noteId)
             putExtra(ReminderIntents.EXTRA_REQUEST_CODE, requestCode)
+            putExtra(ReminderIntents.EXTRA_SCHEDULED_AT, triggerAtMillis)
             putExtra(ReminderIntents.EXTRA_TITLE, title)
             putExtra(ReminderIntents.EXTRA_BODY, body)
             putExtra(ReminderIntents.EXTRA_CHANNEL_ID, channelId)

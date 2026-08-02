@@ -13,7 +13,9 @@ import {
 } from "@/features/reminders/api";
 import { ReminderPanel } from "@/features/reminders/ui/ReminderPanel";
 import { describeError } from "@/shared/api/errors";
+import { useT } from "@/shared/i18n";
 import { findGradient } from "@/shared/lib/gradients";
+import { useBackGuard } from "@/shared/lib/useBackGuard";
 import { deviceTimeZone, type NoteId } from "@/shared/types/ids";
 
 /** Idle time before an edit is persisted. Long enough to coalesce typing. */
@@ -26,6 +28,7 @@ interface NoteEditorPageProps {
 
 export function NoteEditorPage({ id, onBack }: NoteEditorPageProps): React.JSX.Element {
   const client = useQueryClient();
+  const t = useT();
   const note = useQuery({ queryKey: ["note", id], queryFn: () => getNote(id) });
 
   const save = useMutation({
@@ -73,14 +76,18 @@ export function NoteEditorPage({ id, onBack }: NoteEditorPageProps): React.JSX.E
     onBack();
   };
 
+  // The back gesture is how most people leave a screen on Android, so it has to
+  // run the same exit as the arrow — flush included — not close the app.
+  useBackGuard(true, leave);
+
   if (note.isPending) {
-    return <p className="text-content-muted p-4 text-sm">Загрузка…</p>;
+    return <p className="text-content-muted p-4 text-sm">{t("common.loading")}</p>;
   }
   if (note.error !== null) {
-    return <p className="text-danger p-4 text-sm">{describeError(note.error)}</p>;
+    return <p className="text-danger p-4 text-sm">{describeError(note.error, t)}</p>;
   }
   if (note.data === null) {
-    return <p className="text-content-muted p-4 text-sm">Заметка не найдена.</p>;
+    return <p className="text-content-muted p-4 text-sm">{t("editor.notFound")}</p>;
   }
 
   return <Loaded note={note.data} onLeave={leave} onPatch={schedule} saving={save.isPending} />;
@@ -101,6 +108,7 @@ interface LoadedProps {
  */
 function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Element {
   const client = useQueryClient();
+  const t = useT();
   const [title, setTitle] = useState(note.title);
   const [currentContentText, setCurrentContentText] = useState(note.contentText);
   const [color, setColor] = useState(note.color);
@@ -130,6 +138,15 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
 
   const gradient = findGradient(color);
 
+  // Registered after the screen's own guard, so back closes an open panel first
+  // and only then leaves the note.
+  useBackGuard(showReminder, () => {
+    setShowReminder(false);
+  });
+  useBackGuard(showColors, () => {
+    setShowColors(false);
+  });
+
   const onBody = useCallback(
     (snapshot: EditorSnapshot): void => {
       setCurrentContentText(snapshot.contentText);
@@ -140,13 +157,15 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
 
   return (
     <div
-      style={gradient === null ? undefined : { backgroundImage: gradient.surface }}
-      className="flex min-h-dvh flex-col"
+      // A coloured note paints the whole editor; the ink and the link colour
+      // come with `note-surface`, per theme.
+      data-note={gradient === null ? undefined : gradient.id}
+      className={`flex flex-1 flex-col ${gradient === null ? "" : "note-surface"}`}
     >
       <header className="flex items-center gap-1 p-2">
         <button
           type="button"
-          aria-label="Назад"
+          aria-label={t("common.back")}
           onClick={onLeave}
           className="text-content flex size-11 shrink-0 items-center justify-center rounded-full"
         >
@@ -154,12 +173,12 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
         </button>
 
         <span className="text-content-muted flex-1 text-center text-xs">
-          {saving ? "Сохранение…" : "Сохранено"}
+          {saving ? t("editor.saving") : t("editor.saved")}
         </span>
 
         <button
           type="button"
-          aria-label="Напоминание"
+          aria-label={t("reminder.title")}
           aria-pressed={showReminder}
           onClick={() => {
             setShowReminder((open) => !open);
@@ -175,7 +194,7 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
 
         <button
           type="button"
-          aria-label="Цвет заметки"
+          aria-label={t("editor.color")}
           aria-pressed={showColors}
           onClick={() => {
             setShowColors((open) => !open);
@@ -189,10 +208,10 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
       {showReminder && (
         <div className="px-4 pb-2">
           {reminder.isPending || sounds.isPending ? (
-            <p className="text-content-muted py-3 text-sm">Загрузка напоминания…</p>
+            <p className="text-content-muted py-3 text-sm">{t("reminder.loading")}</p>
           ) : reminder.error !== null || sounds.error !== null ? (
             <p className="text-danger py-3 text-sm">
-              {describeError(reminder.error ?? sounds.error)}
+              {describeError(reminder.error ?? sounds.error, t)}
             </p>
           ) : reminder.data !== undefined && sounds.data !== undefined ? (
             <ReminderPanel
@@ -202,9 +221,9 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
               busy={saveReminder.isPending || removeReminder.isPending}
               error={
                 saveReminder.error !== null
-                  ? describeError(saveReminder.error)
+                  ? describeError(saveReminder.error, t)
                   : removeReminder.error !== null
-                    ? describeError(removeReminder.error)
+                    ? describeError(removeReminder.error, t)
                     : null
               }
               onSave={(value) => {
@@ -248,8 +267,8 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
             setTitle(event.target.value);
             onPatch({ title: event.target.value });
           }}
-          placeholder="Заголовок"
-          aria-label="Заголовок"
+          placeholder={t("editor.titlePlaceholder")}
+          aria-label={t("editor.titlePlaceholder")}
           className="min-h-12 w-full bg-transparent text-2xl font-semibold tracking-tight outline-none"
         />
 

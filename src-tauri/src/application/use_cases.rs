@@ -253,6 +253,23 @@ impl ReminderUseCases {
         }
     }
 
+    /// Returns the note a notification tap asked to open, once.
+    ///
+    /// The id comes back from an Android intent extra rather than from the
+    /// database, so it is parsed instead of trusted. A malformed one counts as
+    /// nothing pending rather than as an error: this is asked on every start,
+    /// and failing it would break opening the app normally.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    pub fn take_launch_target(&self) -> AppResult<Option<String>> {
+        Ok(self
+            .alarms
+            .take_launch_target()?
+            .and_then(|id| NoteId::parse(&id).ok())
+            .map(|id| id.to_string()))
+    }
+
     /// Returns sound choices and the concrete global default.
     ///
     /// # Errors
@@ -271,6 +288,7 @@ impl ReminderUseCases {
 fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> Alarm {
     Alarm {
         occurrence_id: scheduled.occurrence.id.to_string(),
+        note_id: scheduled.reminder.note_id.to_string(),
         request_code: scheduled.occurrence.alarm_request_code,
         trigger_at: scheduled.occurrence.occurrence_at,
         title: scheduled.reminder.title.clone(),
@@ -377,6 +395,7 @@ mod tests {
     struct FakeAlarmClock {
         scheduled: parking_lot::Mutex<Vec<Alarm>>,
         cancelled: parking_lot::Mutex<Vec<i32>>,
+        launch_target: parking_lot::Mutex<Option<String>>,
         notifications_granted: bool,
         exact: bool,
     }
@@ -390,6 +409,10 @@ mod tests {
         fn cancel(&self, request_code: i32) -> AppResult<()> {
             self.cancelled.lock().push(request_code);
             Ok(())
+        }
+
+        fn take_launch_target(&self) -> AppResult<Option<String>> {
+            Ok(self.launch_target.lock().take())
         }
 
         fn permissions(&self) -> AppResult<AlarmPermissions> {

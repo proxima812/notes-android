@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import type { Translate } from "@/shared/i18n";
+
 /**
  * Error taxonomy mirrored from `AppError` in the Rust core.
  *
@@ -76,16 +78,24 @@ export class BridgeError extends Error {
   }
 }
 
-/** Converts any thrown value into a message safe to show to the user. */
-export function describeError(error: unknown): string {
+/**
+ * Converts any thrown value into a message safe to show to the user.
+ *
+ * `t` is passed in rather than imported so this stays a plain function outside
+ * React. Only the two messages the app writes itself are translated: an
+ * `AppError` carries text from the core and an unexpected `Error` carries text
+ * from the platform, and inventing a friendly translation for either would hide
+ * the one detail that makes the failure diagnosable.
+ */
+export function describeError(error: unknown, t: Translate): string {
   if (error instanceof AppError) {
     return error.message;
   }
   if (error instanceof BridgeError) {
-    return "Ядро приложения не отвечает. Попробуйте перезапустить приложение.";
+    return t("error.core");
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return "Произошла неизвестная ошибка.";
+  return t("error.unknown");
 }

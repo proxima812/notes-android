@@ -1,5 +1,6 @@
 import { Check, Ban } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import { NOTE_GRADIENTS } from "@/shared/lib/gradients";
 
 interface GradientPickerProps {
@@ -8,17 +9,19 @@ interface GradientPickerProps {
 }
 
 export function GradientPicker({ value, onChange }: GradientPickerProps): React.JSX.Element {
+  const t = useT();
+
   return (
     <div
       role="radiogroup"
-      aria-label="Цвет заметки"
+      aria-label={t("editor.color")}
       className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1"
     >
       <button
         type="button"
         role="radio"
         aria-checked={value === null}
-        aria-label="Без цвета"
+        aria-label={t("editor.noColor")}
         onClick={() => {
           onChange(null);
         }}
@@ -33,7 +36,7 @@ export function GradientPicker({ value, onChange }: GradientPickerProps): React.
           type="button"
           role="radio"
           aria-checked={value === gradient.id}
-          aria-label={gradient.label}
+          aria-label={t(gradient.labelKey)}
           onClick={() => {
             onChange(gradient.id);
           }}

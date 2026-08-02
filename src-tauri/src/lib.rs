@@ -69,6 +69,7 @@ pub fn run() {
             application::commands::reminders_get_for_note,
             application::commands::reminders_upsert_for_note,
             application::commands::reminders_delete_for_note,
+            application::commands::reminders_take_launch_target,
             application::commands::reminder_sounds_list,
             application::commands::search_run,
             application::commands::search_recent,

@@ -5,8 +5,8 @@ use tauri::{
 };
 
 use crate::models::{
-    CancelRequest, Empty, PermissionRequestResponse, ReminderPermissions, RequestPermissionArgs,
-    ScheduleRequest, ScheduleResponse,
+    CancelRequest, Empty, LaunchTarget, PermissionRequestResponse, ReminderPermissions,
+    RequestPermissionArgs, ScheduleRequest, ScheduleResponse,
 };
 
 /// Alias declared on the Kotlin plugin for `POST_NOTIFICATIONS`.
@@ -45,6 +45,16 @@ impl<R: Runtime> Reminders<R> {
         self.0
             .run_mobile_plugin::<Empty>("cancel", request)
             .map(|_| ())
+            .map_err(Into::into)
+    }
+
+    /// Collects the note a notification tap asked to open, clearing it.
+    ///
+    /// # Errors
+    /// Fails when the Kotlin side cannot be reached.
+    pub fn take_launch_target(&self) -> crate::Result<LaunchTarget> {
+        self.0
+            .run_mobile_plugin("takeLaunchTarget", ())
             .map_err(Into::into)
     }
 
