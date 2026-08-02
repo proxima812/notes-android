@@ -32,6 +32,11 @@ class ReminderReceiver : BroadcastReceiver() {
             Log.w(TAG, "получен будильник без канала уведомлений")
             return
         }
+        // It has fired, so there is nothing left for a reboot to restore. Done
+        // before the notification is posted: a reminder shown twice after a
+        // restart is a worse bug than one that fails to post and is forgotten.
+        AlarmStore.forget(context, requestCode)
+
         val vibrate = intent.getBooleanExtra(ReminderIntents.EXTRA_VIBRATE, true)
         val noteId = intent.getStringExtra(ReminderIntents.EXTRA_NOTE_ID)
         val scheduledAt = intent.getLongExtra(ReminderIntents.EXTRA_SCHEDULED_AT, 0L)

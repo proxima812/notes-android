@@ -95,23 +95,20 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         try {
-            val channelId = ReminderNotifications.ensureChannel(
-                context = activity,
-                soundId = args.soundId,
-                soundLabel = args.soundLabel,
-                vibrate = args.vibrate,
-            )
             val armedExact = AlarmScheduler.schedule(
                 context = activity,
-                occurrenceId = args.occurrenceId,
-                noteId = args.noteId,
-                requestCode = args.requestCode,
-                triggerAtMillis = args.triggerAtMillis,
-                title = args.title,
-                body = args.body,
-                exact = args.exact,
-                channelId = channelId,
-                vibrate = args.vibrate,
+                alarm = ArmedAlarm(
+                    occurrenceId = args.occurrenceId,
+                    noteId = args.noteId,
+                    requestCode = args.requestCode,
+                    triggerAtMillis = args.triggerAtMillis,
+                    title = args.title,
+                    body = args.body,
+                    soundId = args.soundId,
+                    soundLabel = args.soundLabel,
+                    vibrate = args.vibrate,
+                    exact = args.exact,
+                ),
             )
 
             val result = JSObject()
