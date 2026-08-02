@@ -70,6 +70,12 @@ export const kk: Dictionary = {
   "reminder.repeat.monthly": "Ай сайын",
   "reminder.repeat.yearly": "Жыл сайын",
 
+  "checklist.title": "Тексеру тізімі",
+  "checklist.add": "Жаңа тармақ",
+  "checklist.progress": "{total} ішінен {done}",
+  "checklist.remove": "«{title}» тармағын жою",
+  "checklist.open": "Жазбаның тексеру тізімі",
+
   "filing.title": "Қалталар мен тегтер",
   "filing.folders": "Қалталар",
   "filing.tags": "Тегтер",

@@ -18,8 +18,8 @@ use crate::state::AppState;
 use super::dto::{
     AppIconCatalogDto, BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest,
     FolderDto, ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, ReminderDto,
-    ReminderSoundCatalogDto, SearchHitDto, SearchRequest, TagDto, UpdateNoteRequest,
-    UpsertReminderRequest,
+    ReminderSoundCatalogDto, SearchHitDto, SearchRequest, TagDto, TaskDto, TaskProgressDto,
+    UpdateNoteRequest, UpsertReminderRequest,
 };
 use super::use_cases::move_note_to_trash;
 
@@ -257,6 +257,55 @@ pub async fn backup_latest(
             .map(|record| record.map(BackupRecordDto::from))
     })
     .await)
+}
+
+#[tauri::command]
+pub async fn tasks_list_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<Vec<TaskDto>>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || {
+        tasks
+            .list_for_note(&note_id)
+            .map(|items| items.into_iter().map(TaskDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn tasks_create_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+    title: String,
+) -> Result<CommandResult<TaskDto>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || tasks.create_for_note(&note_id, &title).map(TaskDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn tasks_set_completed(
+    state: State<'_, AppState>,
+    id: String,
+    completed: bool,
+) -> Result<CommandResult<TaskDto>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || tasks.set_completed(&id, completed).map(TaskDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn tasks_delete(state: State<'_, AppState>, id: String) -> Result<CommandResult<()>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || tasks.delete(&id)).await)
+}
+
+#[tauri::command]
+pub async fn tasks_progress_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<TaskProgressDto>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || tasks.progress_for_note(&note_id).map(TaskProgressDto::from)).await)
 }
 
 #[tauri::command]

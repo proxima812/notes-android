@@ -488,6 +488,42 @@ impl From<crate::application::app_icons::AppIconCatalog> for AppIconCatalogDto {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TaskDto {
+    pub id: String,
+    pub title: String,
+    pub completed: bool,
+    pub position: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskProgressDto {
+    pub total: i64,
+    pub completed: i64,
+}
+
+impl From<crate::domain::tasks::Task> for TaskDto {
+    fn from(task: crate::domain::tasks::Task) -> Self {
+        Self {
+            id: task.id.to_string(),
+            title: task.title,
+            completed: task.status.is_completed(),
+            position: task.position,
+        }
+    }
+}
+
+impl From<crate::domain::tasks::TaskProgress> for TaskProgressDto {
+    fn from(progress: crate::domain::tasks::TaskProgress) -> Self {
+        Self {
+            total: progress.total,
+            completed: progress.completed,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TagDto {
     pub id: String,
     pub name: String,

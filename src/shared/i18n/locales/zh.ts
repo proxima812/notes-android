@@ -70,6 +70,12 @@ export const zh: Dictionary = {
   "reminder.repeat.monthly": "每月",
   "reminder.repeat.yearly": "每年",
 
+  "checklist.title": "清单",
+  "checklist.add": "新条目",
+  "checklist.progress": "{done} / {total}",
+  "checklist.remove": "删除条目「{title}」",
+  "checklist.open": "这条笔记的清单",
+
   "filing.title": "文件夹与标签",
   "filing.folders": "文件夹",
   "filing.tags": "标签",

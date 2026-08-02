@@ -84,6 +84,12 @@ export const ru = {
   "reminder.repeat.monthly": "Каждый месяц",
   "reminder.repeat.yearly": "Каждый год",
 
+  "checklist.title": "Чек-лист",
+  "checklist.add": "Новый пункт",
+  "checklist.progress": "{done} из {total}",
+  "checklist.remove": "Удалить пункт «{title}»",
+  "checklist.open": "Чек-лист заметки",
+
   "filing.title": "Папки и теги",
   "filing.folders": "Папки",
   "filing.tags": "Теги",

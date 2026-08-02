@@ -70,6 +70,12 @@ export const ba: Dictionary = {
   "reminder.repeat.monthly": "Һәр ай",
   "reminder.repeat.yearly": "Һәр йыл",
 
+  "checklist.title": "Тикшереү исемлеге",
+  "checklist.add": "Яңы пункт",
+  "checklist.progress": "{total} эсенән {done}",
+  "checklist.remove": "«{title}» пунктын бөтөрөргә",
+  "checklist.open": "Яҙманың тикшереү исемлеге",
+
   "filing.title": "Папкалар һәм тегтар",
   "filing.folders": "Папкалар",
   "filing.tags": "Тегтар",

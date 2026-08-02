@@ -70,6 +70,12 @@ export const en: Dictionary = {
   "reminder.repeat.monthly": "Every month",
   "reminder.repeat.yearly": "Every year",
 
+  "checklist.title": "Checklist",
+  "checklist.add": "New item",
+  "checklist.progress": "{done} of {total}",
+  "checklist.remove": "Delete the item “{title}”",
+  "checklist.open": "Checklist of this note",
+
   "filing.title": "Folders and tags",
   "filing.folders": "Folders",
   "filing.tags": "Tags",

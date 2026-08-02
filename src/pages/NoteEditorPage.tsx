@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlarmClock, ArrowLeft, Palette, Tags } from "lucide-react";
+import { AlarmClock, ArrowLeft, ListChecks, Palette, Tags } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getNote, updateNote, type UpdateNoteRequest } from "@/features/notes/api";
@@ -14,6 +14,7 @@ import {
   upsertReminderForNote,
 } from "@/features/reminders/api";
 import { NoteFiling } from "@/features/organisation/ui/NoteFiling";
+import { NoteChecklist } from "@/features/tasks/ui/NoteChecklist";
 import { ReminderPanel } from "@/features/reminders/ui/ReminderPanel";
 import type { Reminder } from "@/features/reminders/api";
 import { describeError } from "@/shared/api/errors";
@@ -119,6 +120,7 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
   const [showColors, setShowColors] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
   const [showFiling, setShowFiling] = useState(false);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   const reminders = useQuery({
     queryKey: ["reminders", note.id],
@@ -171,6 +173,9 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
   useBackGuard(showFiling, () => {
     setShowFiling(false);
   });
+  useBackGuard(showChecklist, () => {
+    setShowChecklist(false);
+  });
 
   const onBody = useCallback(
     (snapshot: EditorSnapshot): void => {
@@ -215,6 +220,18 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
           }`}
         >
           <AlarmClock className="size-5" />
+        </button>
+
+        <button
+          type="button"
+          aria-label={t("checklist.open")}
+          aria-pressed={showChecklist}
+          onClick={() => {
+            setShowChecklist((open) => !open);
+          }}
+          className="text-content flex size-11 shrink-0 items-center justify-center rounded-full"
+        >
+          <ListChecks className="size-5" />
         </button>
 
         <button
@@ -292,6 +309,12 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
               }}
             />
           ) : null}
+        </div>
+      )}
+
+      {showChecklist && (
+        <div className="px-4 pb-2">
+          <NoteChecklist noteId={note.id} />
         </div>
       )}
 

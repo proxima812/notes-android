@@ -7,3 +7,4 @@ pub mod organisation;
 pub mod reminders;
 pub mod search;
 pub mod settings;
+pub mod tasks;

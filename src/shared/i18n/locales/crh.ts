@@ -71,6 +71,12 @@ export const crh: Dictionary = {
   "reminder.repeat.monthly": "Er ay",
   "reminder.repeat.yearly": "Er yıl",
 
+  "checklist.title": "Cedvel",
+  "checklist.add": "Yañı satır",
+  "checklist.progress": "{total} taneden {done}",
+  "checklist.remove": "«{title}» satırını sil",
+  "checklist.open": "Nottaki cedvel",
+
   "filing.title": "Papkalar ve tegler",
   "filing.folders": "Papkalar",
   "filing.tags": "Tegler",
