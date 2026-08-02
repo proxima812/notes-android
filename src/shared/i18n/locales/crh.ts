@@ -59,6 +59,10 @@ export const crh: Dictionary = {
   "reminder.presetAdd": "Qoş",
   "reminder.presetRemove": "{time} qalıbını sil",
 
+  "reminder.add": "Hatırlatma qoş",
+  "reminder.stopEditing": "Deñiştirme",
+  "reminder.removeOne": "«{title}» hatırlatmasını sil",
+
   "reminder.repeat": "Tekrarlama",
   "reminder.repeatNever": "Tekrarlanmasın",
   "reminder.repeat.daily": "Er kün",

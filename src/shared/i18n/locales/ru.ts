@@ -72,6 +72,10 @@ export const ru = {
   "reminder.presetAdd": "Добавить",
   "reminder.presetRemove": "Удалить шаблон {time}",
 
+  "reminder.add": "Добавить напоминание",
+  "reminder.stopEditing": "Не изменять",
+  "reminder.removeOne": "Удалить напоминание «{title}»",
+
   "reminder.repeat": "Повтор",
   "reminder.repeatNever": "Не повторять",
   "reminder.repeat.daily": "Каждый день",

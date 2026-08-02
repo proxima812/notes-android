@@ -1,7 +1,7 @@
 //! Persistence boundary for reminders.
 
 use crate::domain::clock::Timestamp;
-use crate::domain::ids::NoteId;
+use crate::domain::ids::{NoteId, ReminderId};
 use crate::error::AppResult;
 
 use super::{Reminder, ReminderDraft, ScheduledReminder};
@@ -15,32 +15,38 @@ pub struct ThinWindow {
 }
 
 pub trait ReminderRepository: Send + Sync {
-    /// The nearest firing still ahead of `now`, if any.
-    fn find_active_for_note(
-        &self,
-        note_id: NoteId,
-        now: Timestamp,
-    ) -> AppResult<Option<ScheduledReminder>>;
+    /// The nearest firing of each reminder on a note, soonest first.
+    ///
+    /// One row per reminder rather than per firing: a repeating reminder is
+    /// one thing the user set, however many alarms stand behind it.
+    fn list_for_note(&self, note_id: NoteId, now: Timestamp) -> AppResult<Vec<ScheduledReminder>>;
 
-    /// Replaces the note's reminder and everything armed for it.
+    /// Writes one reminder and everything armed for it.
     ///
     /// `arm` is called for each new occurrence and reports whether the platform
     /// gave an exact alarm; `disarm` takes back the occurrences being replaced.
     /// Arming happens before anything is taken back, so a failure part-way
     /// leaves the reminder the user already had still armed.
-    fn upsert_for_note(
+    fn save_for_note(
         &self,
         draft: ReminderDraft,
         arm: &mut dyn FnMut(&ScheduledReminder) -> AppResult<bool>,
         disarm: &mut dyn FnMut(i32) -> AppResult<()>,
     ) -> AppResult<ScheduledReminder>;
 
-    /// Cancels the note's reminder and every occurrence armed for it.
-    fn delete_for_note(
+    /// Cancels one reminder and every occurrence armed for it.
+    fn delete(
+        &self,
+        reminder_id: ReminderId,
+        disarm: &mut dyn FnMut(i32) -> AppResult<()>,
+    ) -> AppResult<Option<ScheduledReminder>>;
+
+    /// Cancels every reminder on a note, for when the note itself goes.
+    fn delete_all_for_note(
         &self,
         note_id: NoteId,
         disarm: &mut dyn FnMut(i32) -> AppResult<()>,
-    ) -> AppResult<Option<ScheduledReminder>>;
+    ) -> AppResult<u32>;
 
     /// Moves an occurrence to another instant, recording the zone it now means.
     ///

@@ -100,6 +100,8 @@ export type ReminderSound = z.infer<typeof reminderSoundSchema>;
 export type ReminderSoundCatalog = z.infer<typeof reminderSoundCatalogSchema>;
 
 export interface UpsertReminderRequest {
+  /** The reminder being edited, or `null` to add another one to the note. */
+  readonly reminderId: ReminderId | null;
   readonly noteId: NoteId;
   readonly title: string;
   readonly body: string;
@@ -110,8 +112,9 @@ export interface UpsertReminderRequest {
   readonly recurrence: string | null;
 }
 
-export async function getReminderForNote(noteIdValue: NoteId): Promise<Reminder | null> {
-  return callCommand("reminders_get_for_note", reminderSchema.nullable(), {
+/** Every reminder on a note, soonest first. */
+export async function listRemindersForNote(noteIdValue: NoteId): Promise<Reminder[]> {
+  return callCommand("reminders_list_for_note", z.array(reminderSchema), {
     noteId: noteIdValue,
   });
 }
@@ -122,9 +125,9 @@ export async function upsertReminderForNote(
   return callCommand("reminders_upsert_for_note", reminderSchema, { request });
 }
 
-export async function deleteReminderForNote(noteIdValue: NoteId): Promise<null> {
-  return callCommand("reminders_delete_for_note", z.null(), {
-    noteId: noteIdValue,
+export async function deleteReminder(reminderIdValue: ReminderId): Promise<null> {
+  return callCommand("reminders_delete", z.null(), {
+    reminderId: reminderIdValue,
   });
 }
 

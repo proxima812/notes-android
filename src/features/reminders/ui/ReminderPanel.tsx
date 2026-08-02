@@ -1,4 +1,4 @@
-import { ChevronDown, Pencil, Plus, X } from "lucide-react";
+import { ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { useT } from "@/shared/i18n";
@@ -28,7 +28,12 @@ export interface ReminderFormValue {
 }
 
 interface ReminderPanelProps {
+  /** The reminder being edited, or `null` when adding another one. */
   readonly initial: Reminder | null;
+  /** Everything already set on this note, soonest first. */
+  readonly existing: readonly Reminder[];
+  readonly onEdit: (reminder: Reminder | null) => void;
+  readonly onRemove: (id: Reminder["id"]) => void;
   readonly sounds: SoundCatalog;
   readonly noteTitle: string;
   readonly busy: boolean;
@@ -38,7 +43,6 @@ interface ReminderPanelProps {
   /** Receives the whole set the user now wants, not a change to it. */
   readonly onSavePresets: (next: readonly string[]) => void;
   readonly onSave: (value: ReminderFormValue) => void;
-  readonly onDelete: () => void;
   readonly onClose: () => void;
 }
 
@@ -89,6 +93,9 @@ function defaultSoundLabel(sounds: SoundCatalog): string {
 
 export function ReminderPanel({
   initial,
+  existing,
+  onEdit,
+  onRemove,
   sounds,
   noteTitle,
   busy,
@@ -96,7 +103,6 @@ export function ReminderPanel({
   presets,
   onSavePresets,
   onSave,
-  onDelete,
   onClose,
 }: ReminderPanelProps): React.JSX.Element {
   const t = useT();
@@ -173,6 +179,47 @@ export function ReminderPanel({
           <X className="size-5" />
         </button>
       </div>
+
+      {existing.length > 0 && (
+        <ul className="mb-4 space-y-2">
+          {existing.map((item) => {
+            const editing = item.id === initial?.id;
+            return (
+              <li
+                key={item.id}
+                className={`bg-surface flex min-h-11 items-center gap-2 rounded-xl border px-3 ${
+                  editing ? "border-accent" : "border-border-subtle"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    onEdit(editing ? null : item);
+                  }}
+                  className="min-w-0 flex-1 py-2 text-left"
+                >
+                  <span className="text-content block truncate text-sm">{item.title}</span>
+                  <span className="text-content-muted block text-xs">
+                    {new Date(item.scheduledAt).toLocaleString()}
+                    {item.recurrence !== null && ` · ${t("reminder.repeat")}`}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={t("reminder.removeOne", { title: item.title })}
+                  disabled={busy}
+                  onClick={() => {
+                    onRemove(item.id);
+                  }}
+                  className="text-content-muted flex size-11 shrink-0 items-center justify-center rounded-full disabled:opacity-40"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <form className="space-y-4" onSubmit={submit}>
         <label className="text-content-muted block text-sm">
@@ -392,16 +439,18 @@ export function ReminderPanel({
             disabled={busy}
             className="bg-accent text-accent-content min-h-11 flex-1 rounded-xl px-4 text-sm font-medium disabled:opacity-40"
           >
-            {t("reminder.save")}
+            {initial === null ? t("reminder.add") : t("reminder.save")}
           </button>
           {initial !== null && (
             <button
               type="button"
               disabled={busy}
-              onClick={onDelete}
-              className="text-danger min-h-11 rounded-xl px-4 text-sm font-medium disabled:opacity-40"
+              onClick={() => {
+                onEdit(null);
+              }}
+              className="text-content-muted min-h-11 rounded-xl px-4 text-sm font-medium disabled:opacity-40"
             >
-              {t("reminder.delete")}
+              {t("reminder.stopEditing")}
             </button>
           )}
         </div>

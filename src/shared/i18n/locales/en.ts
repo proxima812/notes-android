@@ -58,6 +58,10 @@ export const en: Dictionary = {
   "reminder.presetAdd": "Add",
   "reminder.presetRemove": "Remove the {time} preset",
 
+  "reminder.add": "Add a reminder",
+  "reminder.stopEditing": "Leave it be",
+  "reminder.removeOne": "Delete the reminder “{title}”",
+
   "reminder.repeat": "Repeat",
   "reminder.repeatNever": "Never",
   "reminder.repeat.daily": "Every day",

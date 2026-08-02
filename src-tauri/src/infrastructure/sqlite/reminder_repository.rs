@@ -219,6 +219,31 @@ fn write_reminder(
     Ok(id)
 }
 
+/// Marks a reminder deleted and every firing it still had armed cancelled.
+fn cancel_reminder(
+    transaction: &Transaction<'_>,
+    reminder_id: ReminderId,
+    now: Timestamp,
+) -> AppResult<()> {
+    transaction
+        .execute(
+            "UPDATE reminders
+                SET is_enabled = 0, deleted_at = ?1, updated_at = ?1
+              WHERE id = ?2",
+            params![now.as_millis(), reminder_id],
+        )
+        .map_err(AppError::from)?;
+    transaction
+        .execute(
+            "UPDATE reminder_occurrences
+                SET state = 'cancelled', updated_at = ?1
+              WHERE reminder_id = ?2 AND state IN ('scheduled', 'snoozed')",
+            params![now.as_millis(), reminder_id],
+        )
+        .map_err(AppError::from)?;
+    Ok(())
+}
+
 /// The reminder attached to a note, whatever state its occurrences are in.
 fn fetch_reminder(transaction: &Transaction<'_>, reminder_id: ReminderId) -> AppResult<Reminder> {
     transaction
@@ -309,16 +334,38 @@ fn arm_occurrence(
 }
 
 impl ReminderRepository for SqliteReminderRepository {
-    fn find_active_for_note(
-        &self,
-        note_id: NoteId,
-        now: Timestamp,
-    ) -> AppResult<Option<ScheduledReminder>> {
-        self.database
-            .in_transaction(|transaction| fetch_active(transaction, note_id, now))
+    fn list_for_note(&self, note_id: NoteId, now: Timestamp) -> AppResult<Vec<ScheduledReminder>> {
+        self.database.with_connection(|connection| {
+            // The nearest firing of each reminder: `MIN(occurrence_at)` per
+            // reminder, so a repeat shows up once rather than four times.
+            let mut statement = connection
+                .prepare(&format!(
+                    "{SELECT_SCHEDULED}
+                      WHERE r.note_id = ?1
+                        AND r.deleted_at IS NULL
+                        AND r.is_enabled = 1
+                        AND o.state IN ('scheduled', 'snoozed')
+                        AND o.occurrence_at > ?2
+                        AND o.occurrence_at = (
+                              SELECT MIN(sibling.occurrence_at)
+                                FROM reminder_occurrences sibling
+                               WHERE sibling.reminder_id = r.id
+                                 AND sibling.state IN ('scheduled', 'snoozed')
+                                 AND sibling.occurrence_at > ?2
+                            )
+                      ORDER BY o.occurrence_at"
+                ))
+                .map_err(AppError::from)?;
+            let rows = statement
+                .query_map(params![note_id, now.as_millis()], map_scheduled)
+                .map_err(AppError::from)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(AppError::from)?;
+            Ok(rows)
+        })
     }
 
-    fn upsert_for_note(
+    fn save_for_note(
         &self,
         draft: ReminderDraft,
         arm: &mut dyn FnMut(&ScheduledReminder) -> AppResult<bool>,
@@ -330,12 +377,12 @@ impl ReminderRepository for SqliteReminderRepository {
                 return Err(AppError::Reminder(ReminderError::NoFutureOccurrence));
             }
 
-            let existing = fetch_reminder_for_note(transaction, draft.note_id)?;
-            let stale = match existing.as_ref() {
-                Some(reminder) => armed_codes(transaction, reminder.id)?,
+            // An id means "edit this one"; its absence means "add another".
+            let stale = match draft.reminder_id {
+                Some(id) => armed_codes(transaction, id)?,
                 None => Vec::new(),
             };
-            let reminder_id = write_reminder(transaction, existing.map(|r| r.id), &draft, now)?;
+            let reminder_id = write_reminder(transaction, draft.reminder_id, &draft, now)?;
             let reminder = fetch_reminder(transaction, reminder_id)?;
 
             // Arm first, take back second. A failure here rolls the transaction
@@ -368,36 +415,51 @@ impl ReminderRepository for SqliteReminderRepository {
         })
     }
 
-    fn delete_for_note(
+    fn delete(
         &self,
-        note_id: NoteId,
+        reminder_id: ReminderId,
         disarm: &mut dyn FnMut(i32) -> AppResult<()>,
     ) -> AppResult<Option<ScheduledReminder>> {
         let now = self.clock.now();
         self.database.in_transaction(|transaction| {
-            let Some(current) = fetch_active(transaction, note_id, now)? else {
+            let Ok(current) = fetch_current(transaction, reminder_id) else {
                 return Ok(None);
             };
-            for code in armed_codes(transaction, current.reminder.id)? {
+            for code in armed_codes(transaction, reminder_id)? {
                 disarm(code)?;
             }
-            transaction
-                .execute(
-                    "UPDATE reminders
-                        SET is_enabled = 0, deleted_at = ?1, updated_at = ?1
-                      WHERE id = ?2",
-                    params![now.as_millis(), current.reminder.id],
-                )
-                .map_err(AppError::from)?;
-            transaction
-                .execute(
-                    "UPDATE reminder_occurrences
-                        SET state = 'cancelled', updated_at = ?1
-                      WHERE reminder_id = ?2 AND state IN ('scheduled', 'snoozed')",
-                    params![now.as_millis(), current.reminder.id],
-                )
-                .map_err(AppError::from)?;
+            cancel_reminder(transaction, reminder_id, now)?;
             Ok(Some(current))
+        })
+    }
+
+    fn delete_all_for_note(
+        &self,
+        note_id: NoteId,
+        disarm: &mut dyn FnMut(i32) -> AppResult<()>,
+    ) -> AppResult<u32> {
+        let now = self.clock.now();
+        self.database.in_transaction(|transaction| {
+            let mut statement = transaction
+                .prepare(
+                    "SELECT id FROM reminders
+                      WHERE note_id = ?1 AND deleted_at IS NULL AND is_enabled = 1",
+                )
+                .map_err(AppError::from)?;
+            let ids = statement
+                .query_map([note_id], |row| row.get::<_, ReminderId>(0))
+                .map_err(AppError::from)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(AppError::from)?;
+            drop(statement);
+
+            for id in &ids {
+                for code in armed_codes(transaction, *id)? {
+                    disarm(code)?;
+                }
+                cancel_reminder(transaction, *id, now)?;
+            }
+            Ok(u32::try_from(ids.len()).unwrap_or(u32::MAX))
         })
     }
 
@@ -593,6 +655,7 @@ mod tests {
 
     fn draft(note_id: NoteId, at: i64) -> ReminderDraft {
         ReminderDraft {
+            reminder_id: None,
             note_id,
             title: "Проверить".into(),
             body: "Текст".into(),
@@ -623,15 +686,22 @@ mod tests {
     fn replacing_a_reminder_keeps_its_identity_and_takes_the_old_alarm_back() {
         let (repository, note_id) = fixture();
         let first = repository
-            .upsert_for_note(draft(note_id, 2_000), &mut granting, &mut |_| Ok(()))
+            .save_for_note(draft(note_id, 2_000), &mut granting, &mut |_| Ok(()))
             .expect("creates");
 
         let mut taken_back = Vec::new();
         let second = repository
-            .upsert_for_note(draft(note_id, 3_000), &mut |_| Ok(false), &mut |code| {
-                taken_back.push(code);
-                Ok(())
-            })
+            .save_for_note(
+                ReminderDraft {
+                    reminder_id: Some(first.reminder.id),
+                    ..draft(note_id, 3_000)
+                },
+                &mut |_| Ok(false),
+                &mut |code| {
+                    taken_back.push(code);
+                    Ok(())
+                },
+            )
             .expect("replaces");
 
         assert_eq!(
@@ -654,7 +724,7 @@ mod tests {
         let (repository, note_id) = fixture();
         let mut armed = Vec::new();
         let first = repository
-            .upsert_for_note(
+            .save_for_note(
                 repeating(note_id, 2_000, 4),
                 &mut |scheduled| {
                     armed.push(scheduled.occurrence.occurrence_at.as_millis());
@@ -677,7 +747,7 @@ mod tests {
     fn a_window_is_topped_up_without_arming_what_is_already_armed() {
         let (repository, note_id) = fixture();
         repository
-            .upsert_for_note(repeating(note_id, 2_000, 2), &mut granting, &mut |_| Ok(()))
+            .save_for_note(repeating(note_id, 2_000, 2), &mut granting, &mut |_| Ok(()))
             .expect("creates");
 
         let thin = repository
@@ -704,7 +774,7 @@ mod tests {
     fn a_firing_whose_time_has_passed_stops_counting_as_armed() {
         let (repository, note_id) = fixture();
         repository
-            .upsert_for_note(repeating(note_id, 2_000, 2), &mut granting, &mut |_| Ok(()))
+            .save_for_note(repeating(note_id, 2_000, 2), &mut granting, &mut |_| Ok(()))
             .expect("creates");
 
         let elapsed = repository
@@ -726,12 +796,12 @@ mod tests {
     fn deleting_takes_back_every_firing_that_was_armed() {
         let (repository, note_id) = fixture();
         repository
-            .upsert_for_note(repeating(note_id, 2_000, 3), &mut granting, &mut |_| Ok(()))
+            .save_for_note(repeating(note_id, 2_000, 3), &mut granting, &mut |_| Ok(()))
             .expect("creates");
 
         let mut taken_back = Vec::new();
         repository
-            .delete_for_note(note_id, &mut |code| {
+            .delete_all_for_note(note_id, &mut |code| {
                 taken_back.push(code);
                 Ok(())
             })
@@ -747,7 +817,7 @@ mod tests {
     #[test]
     fn a_schedule_failure_rolls_the_sql_transaction_back() {
         let (repository, note_id) = fixture();
-        let result = repository.upsert_for_note(
+        let result = repository.save_for_note(
             draft(note_id, 2_000),
             &mut |_| {
                 Err(AppError::Notification(NotificationError::ScheduleFailed {
@@ -759,30 +829,76 @@ mod tests {
 
         assert!(result.is_err());
         assert!(repository
-            .find_active_for_note(note_id, Timestamp::from_millis(1_000))
+            .list_for_note(note_id, Timestamp::from_millis(1_000))
             .expect("reads")
-            .is_none());
+            .is_empty());
     }
 
     #[test]
-    fn delete_cancels_inside_the_same_transaction() {
+    fn a_note_can_hold_more_than_one_reminder() {
         let (repository, note_id) = fixture();
-        let stored = repository
-            .upsert_for_note(draft(note_id, 2_000), &mut granting, &mut |_| Ok(()))
-            .expect("creates");
-        let mut cancelled = None;
-
         repository
-            .delete_for_note(note_id, &mut |code| {
+            .save_for_note(draft(note_id, 2_000), &mut granting, &mut |_| Ok(()))
+            .expect("creates the first");
+        repository
+            .save_for_note(draft(note_id, 3_000), &mut granting, &mut |_| Ok(()))
+            .expect("creates the second");
+
+        let listed = repository
+            .list_for_note(note_id, Timestamp::from_millis(1_000))
+            .expect("reads");
+
+        assert_eq!(
+            listed.len(),
+            2,
+            "saving without an id adds rather than replaces"
+        );
+        assert_ne!(listed[0].reminder.id, listed[1].reminder.id);
+        assert_eq!(
+            listed[0].occurrence.occurrence_at.as_millis(),
+            2_000,
+            "the soonest comes first"
+        );
+    }
+
+    #[test]
+    fn a_repeating_reminder_is_listed_once_however_many_firings_it_has() {
+        let (repository, note_id) = fixture();
+        repository
+            .save_for_note(repeating(note_id, 2_000, 4), &mut granting, &mut |_| Ok(()))
+            .expect("creates");
+
+        let listed = repository
+            .list_for_note(note_id, Timestamp::from_millis(1_000))
+            .expect("reads");
+
+        assert_eq!(listed.len(), 1, "four alarms are still one reminder");
+        assert_eq!(listed[0].occurrence.occurrence_at.as_millis(), 2_000);
+    }
+
+    #[test]
+    fn deleting_one_reminder_leaves_the_others_alone() {
+        let (repository, note_id) = fixture();
+        let first = repository
+            .save_for_note(draft(note_id, 2_000), &mut granting, &mut |_| Ok(()))
+            .expect("creates the first");
+        repository
+            .save_for_note(draft(note_id, 3_000), &mut granting, &mut |_| Ok(()))
+            .expect("creates the second");
+
+        let mut cancelled = None;
+        repository
+            .delete(first.reminder.id, &mut |code| {
                 cancelled = Some(code);
                 Ok(())
             })
             .expect("deletes");
 
-        assert_eq!(cancelled, Some(stored.occurrence.alarm_request_code));
-        assert!(repository
-            .find_active_for_note(note_id, Timestamp::from_millis(1_000))
-            .expect("reads")
-            .is_none());
+        assert_eq!(cancelled, Some(first.occurrence.alarm_request_code));
+        let left = repository
+            .list_for_note(note_id, Timestamp::from_millis(1_000))
+            .expect("reads");
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].occurrence.occurrence_at.as_millis(), 3_000);
     }
 }

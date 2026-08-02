@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use crate::domain::clock::{SharedClock, Timestamp};
-use crate::domain::ids::NoteId;
+use crate::domain::ids::{NoteId, ReminderId};
 use crate::domain::notes::{
     validate_content, validate_title, Note, NoteRepository, Page, PageRequest,
 };
@@ -125,15 +125,16 @@ impl ReminderUseCases {
         }
     }
 
-    /// Returns the future active reminder for a note.
+    /// Every reminder on a note, soonest first.
     ///
     /// # Errors
     /// Fails for a malformed note id, invalid sound setting, or storage errors.
-    pub fn get_for_note(&self, note_id: &str) -> AppResult<Option<ReminderView>> {
+    pub fn list_for_note(&self, note_id: &str) -> AppResult<Vec<ReminderView>> {
         let note_id = NoteId::parse(note_id)?;
         let configured_default = self.reminders.default_sound_id()?;
         self.reminders
-            .find_active_for_note(note_id, self.clock.now())?
+            .list_for_note(note_id, self.clock.now())?
+            .into_iter()
             .map(|scheduled| {
                 let effective_sound =
                     resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
@@ -142,7 +143,7 @@ impl ReminderUseCases {
                     effective_sound,
                 })
             })
-            .transpose()
+            .collect()
     }
 
     /// Creates or replaces the note's reminder and everything armed for it.
@@ -196,6 +197,11 @@ impl ReminderUseCases {
         }
 
         let draft = ReminderDraft {
+            reminder_id: request
+                .reminder_id
+                .as_deref()
+                .map(ReminderId::parse)
+                .transpose()?,
             note_id,
             title: title.to_owned(),
             body: request.body,
@@ -211,7 +217,7 @@ impl ReminderUseCases {
         // transaction rolls the rows back, and an alarm with no row behind it
         // would fire for a reminder that does not exist.
         let mut armed: Vec<i32> = Vec::new();
-        let result = self.reminders.upsert_for_note(
+        let result = self.reminders.save_for_note(
             draft,
             &mut |next| {
                 armed.push(next.occurrence.alarm_request_code);
@@ -288,48 +294,40 @@ impl ReminderUseCases {
         Ok(added)
     }
 
-    /// Cancels and soft-deletes a note reminder.
+    /// Cancels and soft-deletes one reminder.
+    ///
+    /// # Errors
+    /// Fails for a malformed identifier, storage errors, or platform errors.
+    pub fn delete(&self, reminder_id: &str) -> AppResult<Option<ReminderView>> {
+        let reminder_id = ReminderId::parse(reminder_id)?;
+        let configured_default = self.reminders.default_sound_id()?;
+        let alarms = Arc::clone(&self.alarms);
+
+        let scheduled = self
+            .reminders
+            .delete(reminder_id, &mut |code| alarms.cancel(code))?;
+
+        scheduled
+            .map(|scheduled| {
+                let effective_sound =
+                    resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
+                Ok(ReminderView {
+                    scheduled,
+                    effective_sound,
+                })
+            })
+            .transpose()
+    }
+
+    /// Cancels every reminder on a note, for when the note itself goes.
     ///
     /// # Errors
     /// Fails for a malformed note id, storage errors, or platform errors.
-    pub fn delete_for_note(&self, note_id: &str) -> AppResult<Option<ReminderView>> {
+    pub fn delete_all_for_note(&self, note_id: &str) -> AppResult<u32> {
         let note_id = NoteId::parse(note_id)?;
-        let configured_default = self.reminders.default_sound_id()?;
         let alarms = Arc::clone(&self.alarms);
-        let mut cancelled: Vec<i32> = Vec::new();
-        let result = self.reminders.delete_for_note(note_id, &mut |code| {
-            cancelled.push(code);
-            alarms.cancel(code)
-        });
-
-        match result {
-            Ok(Some(scheduled)) => {
-                let effective_sound =
-                    resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
-                Ok(Some(ReminderView {
-                    scheduled,
-                    effective_sound,
-                }))
-            }
-            Ok(None) => Ok(None),
-            Err(error) => {
-                // The rows are still there after the rollback, so the alarms
-                // that were taken back have to go back on.
-                if !cancelled.is_empty() {
-                    if let Ok(Some(current)) = self
-                        .reminders
-                        .find_active_for_note(note_id, self.clock.now())
-                    {
-                        if let Ok(sound) =
-                            resolve_sound(&current.reminder.sound, configured_default.as_deref())
-                        {
-                            let _ = self.alarms.schedule(&alarm_from(&current, sound));
-                        }
-                    }
-                }
-                Err(error)
-            }
-        }
+        self.reminders
+            .delete_all_for_note(note_id, &mut |code| alarms.cancel(code))
     }
 
     /// Returns the note a notification tap asked to open, once.
@@ -470,7 +468,7 @@ pub fn move_note_to_trash(
     id: &str,
 ) -> AppResult<()> {
     notes.move_to_trash(id)?;
-    if let Err(error) = reminders.delete_for_note(id) {
+    if let Err(error) = reminders.delete_all_for_note(id) {
         let _ = notes.restore(id);
         return Err(error);
     }
@@ -630,6 +628,7 @@ mod tests {
 
     fn valid_reminder_request(note_id: NoteId) -> UpsertReminderRequest {
         UpsertReminderRequest {
+            reminder_id: None,
             note_id: note_id.to_string(),
             title: "Проверить".into(),
             body: "Текст".into(),
@@ -667,8 +666,9 @@ mod tests {
         assert_eq!(moved, 1);
         let view = fixture
             .reminders
-            .get_for_note(&fixture.note_id.to_string())
+            .list_for_note(&fixture.note_id.to_string())
             .expect("reads")
+            .pop()
             .expect("still there");
         let local = view
             .scheduled
@@ -894,9 +894,9 @@ mod tests {
         assert_eq!(error.code(), "notification_permission_denied");
         assert!(fixture
             .reminders
-            .get_for_note(&fixture.note_id.to_string())
+            .list_for_note(&fixture.note_id.to_string())
             .expect("reads")
-            .is_none());
+            .is_empty());
     }
 
     #[test]

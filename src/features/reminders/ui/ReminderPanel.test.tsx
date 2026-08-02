@@ -29,9 +29,11 @@ describe("ReminderPanel", () => {
         busy={false}
         error={null}
         presets={presets}
+        existing={[]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
         onSavePresets={vi.fn()}
         onSave={onSave}
-        onDelete={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -41,7 +43,7 @@ describe("ReminderPanel", () => {
     await user.type(screen.getByLabelText("Дата"), "2030-01-02");
     await user.clear(screen.getByLabelText("Время"));
     await user.type(screen.getByLabelText("Время"), "03:04");
-    await user.click(screen.getByRole("button", { name: "Сохранить напоминание" }));
+    await user.click(screen.getByRole("button", { name: "Добавить напоминание" }));
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -52,8 +54,8 @@ describe("ReminderPanel", () => {
     );
   });
 
-  it("prefills and deletes an existing reminder", async () => {
-    const onDelete = vi.fn();
+  it("prefills the reminder being edited and removes one from the list", async () => {
+    const onRemove = vi.fn();
     const initial = reminderSchema.parse({
       id: "0193b3b2-4d3c-7c9a-8f2e-1a2b3c4d5e6f",
       noteId: "0193b3b2-4d3c-7c9a-8f2e-1a2b3c4d5e70",
@@ -77,9 +79,11 @@ describe("ReminderPanel", () => {
         busy={false}
         error={null}
         presets={presets}
+        existing={[initial]}
+        onEdit={vi.fn()}
+        onRemove={onRemove}
         onSavePresets={vi.fn()}
         onSave={vi.fn()}
-        onDelete={onDelete}
         onClose={vi.fn()}
       />,
     );
@@ -90,8 +94,10 @@ describe("ReminderPanel", () => {
     ).toBeChecked();
     expect(screen.getByText(/Android может доставить/)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Удалить" }));
-    expect(onDelete).toHaveBeenCalledOnce();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Удалить напоминание «Выпить воду»" }),
+    );
+    expect(onRemove).toHaveBeenCalledWith(initial.id);
   });
 
   it("fills the time from a preset and saves that time", async () => {
@@ -104,9 +110,11 @@ describe("ReminderPanel", () => {
         busy={false}
         error={null}
         presets={presets}
+        existing={[]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
         onSavePresets={vi.fn()}
         onSave={onSave}
-        onDelete={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -115,7 +123,7 @@ describe("ReminderPanel", () => {
     await user.clear(screen.getByLabelText("Дата"));
     await user.type(screen.getByLabelText("Дата"), "2030-01-02");
     await user.selectOptions(screen.getByLabelText("Готовое время"), "09:00");
-    await user.click(screen.getByRole("button", { name: "Сохранить напоминание" }));
+    await user.click(screen.getByRole("button", { name: "Добавить напоминание" }));
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -134,9 +142,11 @@ describe("ReminderPanel", () => {
         busy={false}
         error={null}
         presets={presets}
+        existing={[]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
         onSavePresets={onSavePresets}
         onSave={vi.fn()}
-        onDelete={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -164,9 +174,11 @@ describe("ReminderPanel", () => {
         busy={false}
         error={null}
         presets={presets}
+        existing={[]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
         onSavePresets={vi.fn()}
         onSave={onSave}
-        onDelete={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -175,7 +187,7 @@ describe("ReminderPanel", () => {
     await user.clear(screen.getByLabelText("Дата"));
     await user.type(screen.getByLabelText("Дата"), "2030-01-02");
     await user.selectOptions(screen.getByLabelText("Повтор"), "weekdays");
-    await user.click(screen.getByRole("button", { name: "Сохранить напоминание" }));
+    await user.click(screen.getByRole("button", { name: "Добавить напоминание" }));
 
     expect(onSave).toHaveBeenCalledWith(
       expect.objectContaining({ recurrence: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" }),
@@ -192,9 +204,11 @@ describe("ReminderPanel", () => {
         busy={false}
         error={null}
         presets={presets}
+        existing={[]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
         onSavePresets={vi.fn()}
         onSave={onSave}
-        onDelete={vi.fn()}
         onClose={vi.fn()}
       />,
     );
@@ -202,7 +216,7 @@ describe("ReminderPanel", () => {
     const user = userEvent.setup();
     await user.clear(screen.getByLabelText("Дата"));
     await user.type(screen.getByLabelText("Дата"), "2030-01-02");
-    await user.click(screen.getByRole("button", { name: "Сохранить напоминание" }));
+    await user.click(screen.getByRole("button", { name: "Добавить напоминание" }));
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ recurrence: null }));
   });
@@ -216,9 +230,11 @@ describe("ReminderPanel", () => {
         busy={false}
         error={null}
         presets={[]}
+        existing={[]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
         onSavePresets={vi.fn()}
         onSave={vi.fn()}
-        onDelete={vi.fn()}
         onClose={vi.fn()}
       />,
     );

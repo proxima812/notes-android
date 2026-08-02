@@ -58,6 +58,10 @@ export const ba: Dictionary = {
   "reminder.presetAdd": "Өҫтәргә",
   "reminder.presetRemove": "{time} ҡалыбын бөтөрөргә",
 
+  "reminder.add": "Иҫкә төшөрөү өҫтәргә",
+  "reminder.stopEditing": "Үҙгәртмәҫкә",
+  "reminder.removeOne": "«{title}» иҫкә төшөрөүен бөтөрөргә",
+
   "reminder.repeat": "Ҡабатлау",
   "reminder.repeatNever": "Ҡабатламаҫҡа",
   "reminder.repeat.daily": "Һәр көн",

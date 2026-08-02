@@ -58,6 +58,10 @@ export const kk: Dictionary = {
   "reminder.presetAdd": "Қосу",
   "reminder.presetRemove": "{time} үлгісін жою",
 
+  "reminder.add": "Еске салу қосу",
+  "reminder.stopEditing": "Өзгертпеу",
+  "reminder.removeOne": "«{title}» еске салуын жою",
+
   "reminder.repeat": "Қайталау",
   "reminder.repeatNever": "Қайталамау",
   "reminder.repeat.daily": "Күн сайын",

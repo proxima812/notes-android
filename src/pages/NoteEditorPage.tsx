@@ -6,14 +6,15 @@ import { getNote, updateNote, type UpdateNoteRequest } from "@/features/notes/ap
 import { RichTextEditor, type EditorSnapshot } from "@/features/notes/editor/RichTextEditor";
 import { GradientPicker } from "@/features/notes/ui/GradientPicker";
 import {
-  deleteReminderForNote,
-  getReminderForNote,
+  deleteReminder,
+  listRemindersForNote,
   listReminderSounds,
   listReminderTimePresets,
   saveReminderTimePresets,
   upsertReminderForNote,
 } from "@/features/reminders/api";
 import { ReminderPanel } from "@/features/reminders/ui/ReminderPanel";
+import type { Reminder } from "@/features/reminders/api";
 import { describeError } from "@/shared/api/errors";
 import { useT } from "@/shared/i18n";
 import { findGradient } from "@/shared/lib/gradients";
@@ -117,10 +118,12 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
   const [showColors, setShowColors] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
 
-  const reminder = useQuery({
-    queryKey: ["reminder", note.id],
-    queryFn: () => getReminderForNote(note.id),
+  const reminders = useQuery({
+    queryKey: ["reminders", note.id],
+    queryFn: () => listRemindersForNote(note.id),
   });
+  /** The reminder being edited, or `null` while adding a new one. */
+  const [editing, setEditing] = useState<Reminder | null>(null);
   const sounds = useQuery({
     queryKey: ["reminder-sounds"],
     queryFn: listReminderSounds,
@@ -141,13 +144,15 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
   const saveReminder = useMutation({
     mutationFn: upsertReminderForNote,
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ["reminder", note.id] });
+      setEditing(null);
+      setShowReminder(false);
+      await client.invalidateQueries({ queryKey: ["reminders", note.id] });
     },
   });
   const removeReminder = useMutation({
-    mutationFn: () => deleteReminderForNote(note.id),
+    mutationFn: deleteReminder,
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ["reminder", note.id] });
+      await client.invalidateQueries({ queryKey: ["reminders", note.id] });
     },
   });
 
@@ -199,7 +204,7 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
             setShowReminder((open) => !open);
           }}
           className={`flex size-11 shrink-0 items-center justify-center rounded-full ${
-            reminder.data === undefined || reminder.data === null
+            reminders.data === undefined || reminders.data.length === 0
               ? "text-content"
               : "text-accent"
           }`}
@@ -222,17 +227,22 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
 
       {showReminder && (
         <div className="px-4 pb-2">
-          {reminder.isPending || sounds.isPending || timePresets.isPending ? (
+          {reminders.isPending || sounds.isPending || timePresets.isPending ? (
             <p className="text-content-muted py-3 text-sm">{t("reminder.loading")}</p>
-          ) : reminder.error !== null || sounds.error !== null || timePresets.error !== null ? (
+          ) : reminders.error !== null || sounds.error !== null || timePresets.error !== null ? (
             <p className="text-danger py-3 text-sm">
-              {describeError(reminder.error ?? sounds.error ?? timePresets.error, t)}
+              {describeError(reminders.error ?? sounds.error ?? timePresets.error, t)}
             </p>
-          ) : reminder.data !== undefined &&
+          ) : reminders.data !== undefined &&
             sounds.data !== undefined &&
             timePresets.data !== undefined ? (
             <ReminderPanel
-              initial={reminder.data}
+              initial={editing}
+              existing={reminders.data}
+              onEdit={setEditing}
+              onRemove={(id) => {
+                removeReminder.mutate(id);
+              }}
               sounds={sounds.data}
               noteTitle={title}
               presets={timePresets.data}
@@ -249,6 +259,7 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
               }
               onSave={(value) => {
                 saveReminder.mutate({
+                  reminderId: editing?.id ?? null,
                   noteId: note.id,
                   title: value.title,
                   body: currentContentText,
@@ -258,10 +269,8 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
                   recurrence: value.recurrence,
                 });
               }}
-              onDelete={() => {
-                removeReminder.mutate();
-              }}
               onClose={() => {
+                setEditing(null);
                 setShowReminder(false);
               }}
             />

@@ -58,6 +58,10 @@ export const zh: Dictionary = {
   "reminder.presetAdd": "添加",
   "reminder.presetRemove": "删除预设 {time}",
 
+  "reminder.add": "添加提醒",
+  "reminder.stopEditing": "不修改",
+  "reminder.removeOne": "删除提醒「{title}」",
+
   "reminder.repeat": "重复",
   "reminder.repeatNever": "不重复",
   "reminder.repeat.daily": "每天",

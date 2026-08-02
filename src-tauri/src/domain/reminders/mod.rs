@@ -92,6 +92,8 @@ pub struct ScheduledReminder {
 
 #[derive(Debug, Clone)]
 pub struct ReminderDraft {
+    /// The reminder being edited, or `None` to add another one to the note.
+    pub reminder_id: Option<ReminderId>,
     pub note_id: NoteId,
     pub title: String,
     pub body: String,

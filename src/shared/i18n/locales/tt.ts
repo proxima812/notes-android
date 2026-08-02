@@ -58,6 +58,10 @@ export const tt: Dictionary = {
   "reminder.presetAdd": "Өстәү",
   "reminder.presetRemove": "{time} калыбын бетерү",
 
+  "reminder.add": "Искә төшерү өстәү",
+  "reminder.stopEditing": "Үзгәртмәскә",
+  "reminder.removeOne": "«{title}» искә төшерүен бетерү",
+
   "reminder.repeat": "Кабатлау",
   "reminder.repeatNever": "Кабатламаска",
   "reminder.repeat.daily": "Һәр көн",

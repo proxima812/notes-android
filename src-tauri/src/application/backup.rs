@@ -324,15 +324,15 @@ mod tests {
     }
 
     impl ReminderRepository for FakeReminders {
-        fn find_active_for_note(
+        fn list_for_note(
             &self,
             _note_id: NoteId,
             _now: Timestamp,
-        ) -> AppResult<Option<ScheduledReminder>> {
-            Ok(None)
+        ) -> AppResult<Vec<ScheduledReminder>> {
+            Ok(Vec::new())
         }
 
-        fn upsert_for_note(
+        fn save_for_note(
             &self,
             _draft: ReminderDraft,
             _arm: &mut dyn FnMut(&ScheduledReminder) -> AppResult<bool>,
@@ -341,12 +341,20 @@ mod tests {
             unreachable!("not used by backup")
         }
 
-        fn delete_for_note(
+        fn delete(
             &self,
-            _note_id: NoteId,
+            _reminder_id: crate::domain::ids::ReminderId,
             _disarm: &mut dyn FnMut(i32) -> AppResult<()>,
         ) -> AppResult<Option<ScheduledReminder>> {
             Ok(None)
+        }
+
+        fn delete_all_for_note(
+            &self,
+            _note_id: NoteId,
+            _disarm: &mut dyn FnMut(i32) -> AppResult<()>,
+        ) -> AppResult<u32> {
+            Ok(0)
         }
 
         fn retime(

@@ -415,6 +415,9 @@ impl SearchRequest {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpsertReminderRequest {
+    /// The reminder being edited, or absent to add another one to the note.
+    #[serde(default)]
+    pub reminder_id: Option<String>,
     pub note_id: String,
     pub title: String,
     pub body: String,

@@ -151,15 +151,15 @@ pub async fn notes_duplicate(
 }
 
 #[tauri::command]
-pub async fn reminders_get_for_note(
+pub async fn reminders_list_for_note(
     state: State<'_, AppState>,
     note_id: String,
-) -> Result<CommandResult<Option<ReminderDto>>, ()> {
+) -> Result<CommandResult<Vec<ReminderDto>>, ()> {
     let reminders = Arc::clone(&state.reminders);
     Ok(blocking(move || {
         reminders
-            .get_for_note(&note_id)
-            .map(|value| value.map(ReminderDto::from))
+            .list_for_note(&note_id)
+            .map(|views| views.into_iter().map(ReminderDto::from).collect())
     })
     .await)
 }
@@ -174,12 +174,12 @@ pub async fn reminders_upsert_for_note(
 }
 
 #[tauri::command]
-pub async fn reminders_delete_for_note(
+pub async fn reminders_delete(
     state: State<'_, AppState>,
-    note_id: String,
+    reminder_id: String,
 ) -> Result<CommandResult<()>, ()> {
     let reminders = Arc::clone(&state.reminders);
-    Ok(blocking(move || reminders.delete_for_note(&note_id).map(|_| ())).await)
+    Ok(blocking(move || reminders.delete(&reminder_id).map(|_| ())).await)
 }
 
 /// Note a notification tap asked to open, or nothing if the app was opened the
