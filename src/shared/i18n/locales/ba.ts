@@ -58,6 +58,14 @@ export const ba: Dictionary = {
   "reminder.presetAdd": "Өҫтәргә",
   "reminder.presetRemove": "{time} ҡалыбын бөтөрөргә",
 
+  "reminder.repeat": "Ҡабатлау",
+  "reminder.repeatNever": "Ҡабатламаҫҡа",
+  "reminder.repeat.daily": "Һәр көн",
+  "reminder.repeat.weekdays": "Эш көндәрендә",
+  "reminder.repeat.weekly": "Һәр аҙна",
+  "reminder.repeat.monthly": "Һәр ай",
+  "reminder.repeat.yearly": "Һәр йыл",
+
   "backup.title": "Резерв күсермә",
   "backup.description": "Күсермә һеҙ ҡуйған урында ғына һаҡлана. Ҡушымта бер ҡайҙа ла бер нәмә ебәрмәй.",
   "backup.export": "Күсермә һаҡларға",

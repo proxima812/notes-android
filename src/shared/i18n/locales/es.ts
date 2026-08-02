@@ -58,6 +58,14 @@ export const es: Dictionary = {
   "reminder.presetAdd": "Añadir",
   "reminder.presetRemove": "Eliminar la hora {time}",
 
+  "reminder.repeat": "Repetición",
+  "reminder.repeatNever": "Nunca",
+  "reminder.repeat.daily": "Cada día",
+  "reminder.repeat.weekdays": "De lunes a viernes",
+  "reminder.repeat.weekly": "Cada semana",
+  "reminder.repeat.monthly": "Cada mes",
+  "reminder.repeat.yearly": "Cada año",
+
   "backup.title": "Copia de seguridad",
   "backup.description": "La copia se queda donde tú la dejes. La aplicación no envía nada a ninguna parte.",
   "backup.export": "Guardar una copia",

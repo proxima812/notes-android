@@ -66,6 +66,7 @@ describe("ReminderPanel", () => {
       effectiveSoundId: "death_and_rebirth",
       effectiveSoundLabel: "Death & Rebirth",
       isExact: false,
+      recurrence: null,
     });
 
     render(
@@ -151,6 +152,59 @@ describe("ReminderPanel", () => {
     await user.type(screen.getByLabelText("Добавить"), "06:45");
     await user.click(screen.getByRole("button", { name: "Добавить" }));
     expect(onSavePresets).toHaveBeenLastCalledWith([...presets, "06:45"]);
+  });
+
+  it("saves the chosen repeat as the rule the core stores", async () => {
+    const onSave = vi.fn();
+    render(
+      <ReminderPanel
+        initial={null}
+        sounds={sounds}
+        noteTitle="Проверить"
+        busy={false}
+        error={null}
+        presets={presets}
+        onSavePresets={vi.fn()}
+        onSave={onSave}
+        onDelete={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.clear(screen.getByLabelText("Дата"));
+    await user.type(screen.getByLabelText("Дата"), "2030-01-02");
+    await user.selectOptions(screen.getByLabelText("Повтор"), "weekdays");
+    await user.click(screen.getByRole("button", { name: "Сохранить напоминание" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ recurrence: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" }),
+    );
+  });
+
+  it("saves nothing as the rule when the reminder happens once", async () => {
+    const onSave = vi.fn();
+    render(
+      <ReminderPanel
+        initial={null}
+        sounds={sounds}
+        noteTitle="Проверить"
+        busy={false}
+        error={null}
+        presets={presets}
+        onSavePresets={vi.fn()}
+        onSave={onSave}
+        onDelete={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const user = userEvent.setup();
+    await user.clear(screen.getByLabelText("Дата"));
+    await user.type(screen.getByLabelText("Дата"), "2030-01-02");
+    await user.click(screen.getByRole("button", { name: "Сохранить напоминание" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ recurrence: null }));
   });
 
   it("offers no preset picker once the user has deleted every one", () => {

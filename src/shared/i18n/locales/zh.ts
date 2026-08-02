@@ -58,6 +58,14 @@ export const zh: Dictionary = {
   "reminder.presetAdd": "添加",
   "reminder.presetRemove": "删除预设 {time}",
 
+  "reminder.repeat": "重复",
+  "reminder.repeatNever": "不重复",
+  "reminder.repeat.daily": "每天",
+  "reminder.repeat.weekdays": "工作日",
+  "reminder.repeat.weekly": "每周",
+  "reminder.repeat.monthly": "每月",
+  "reminder.repeat.yearly": "每年",
+
   "backup.title": "备份",
   "backup.description": "备份只留在你放置的位置。应用不会向任何地方发送数据。",
   "backup.export": "保存备份",

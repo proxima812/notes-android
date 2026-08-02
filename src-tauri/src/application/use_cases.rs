@@ -12,11 +12,11 @@ use crate::domain::notes::{
     validate_content, validate_title, Note, NoteRepository, Page, PageRequest,
 };
 use crate::domain::reminders::{
-    parse_zone, reinterpret, resolve_sound, sound_presets, time_presets, ReminderDraft,
-    ReminderRepository, ScheduledReminder, SoundPreset, FALLBACK_SOUND_ID,
+    parse_zone, recurrence, reinterpret, resolve_sound, sound_presets, time_presets, Recurrence,
+    ReminderDraft, ReminderRepository, ScheduledReminder, SoundPreset, FALLBACK_SOUND_ID, WINDOW,
 };
 use crate::domain::search::{SearchHit, SearchRepository};
-use crate::error::{AppError, AppResult, NotificationError, ValidationError};
+use crate::error::{AppError, AppResult, NotificationError, ReminderError, ValidationError};
 use crate::platform::{Alarm, AlarmClock};
 
 use super::dto::{ListNotesRequest, SearchRequest, UpsertReminderRequest};
@@ -145,7 +145,11 @@ impl ReminderUseCases {
             .transpose()
     }
 
-    /// Creates or replaces the note's one active reminder.
+    /// Creates or replaces the note's reminder and everything armed for it.
+    ///
+    /// A repeating reminder is armed several firings ahead. Nothing wakes the
+    /// core when an alarm goes off, so the window is what keeps a repeat alive
+    /// on a phone nobody opens; it is topped up on the next start.
     ///
     /// # Errors
     /// Fails on validation, denied notifications, storage, or platform errors.
@@ -163,11 +167,12 @@ impl ReminderUseCases {
         }
         validate_title(title)?;
         validate_content(&request.body)?;
-        if request.timezone.parse::<chrono_tz::Tz>().is_err() {
-            return Err(AppError::Validation(ValidationError::UnknownTimeZone {
-                value: request.timezone,
-            }));
-        }
+        let zone = parse_zone(&request.timezone)?;
+        let recurrence = request
+            .recurrence
+            .as_deref()
+            .map(Recurrence::parse)
+            .transpose()?;
 
         let configured_default = self.reminders.default_sound_id()?;
         let effective_sound = resolve_sound(&request.sound, configured_default.as_deref())?;
@@ -178,6 +183,18 @@ impl ReminderUseCases {
             ));
         }
 
+        let anchor = scheduled_at.to_zoned(zone)?.naive_local();
+        let occurrences = recurrence::window(
+            anchor,
+            zone,
+            recurrence,
+            self.clock.now(),
+            if recurrence.is_some() { WINDOW } else { 1 },
+        );
+        if occurrences.is_empty() {
+            return Err(AppError::Reminder(ReminderError::NoFutureOccurrence));
+        }
+
         let draft = ReminderDraft {
             note_id,
             title: title.to_owned(),
@@ -185,15 +202,23 @@ impl ReminderUseCases {
             scheduled_at,
             timezone: request.timezone,
             sound: request.sound,
+            recurrence,
+            occurrences,
         };
+
         let alarms = Arc::clone(&self.alarms);
-        let mut applied: Option<(Option<ScheduledReminder>, ScheduledReminder)> = None;
-        let result = self
-            .reminders
-            .upsert_for_note(draft, &mut |previous, next| {
-                applied = Some((previous.cloned(), next.clone()));
+        // Whatever was armed before the failure has to come back off: the
+        // transaction rolls the rows back, and an alarm with no row behind it
+        // would fire for a reminder that does not exist.
+        let mut armed: Vec<i32> = Vec::new();
+        let result = self.reminders.upsert_for_note(
+            draft,
+            &mut |next| {
+                armed.push(next.occurrence.alarm_request_code);
                 alarms.schedule(&alarm_from(next, effective_sound))
-            });
+            },
+            &mut |code| alarms.cancel(code),
+        );
 
         match result {
             Ok(scheduled) => Ok(ReminderView {
@@ -201,19 +226,66 @@ impl ReminderUseCases {
                 effective_sound,
             }),
             Err(error) => {
-                if let Some((previous, next)) = applied {
-                    let _ = self.alarms.cancel(next.occurrence.alarm_request_code);
-                    if let Some(old) = previous {
-                        if let Ok(old_sound) =
-                            resolve_sound(&old.reminder.sound, configured_default.as_deref())
-                        {
-                            let _ = self.alarms.schedule(&alarm_from(&old, old_sound));
-                        }
-                    }
+                for code in armed {
+                    let _ = self.alarms.cancel(code);
                 }
                 Err(error)
             }
         }
+    }
+
+    /// Tops every repeating reminder back up to a full window of firings.
+    ///
+    /// Asked on each start. Occurrences whose time has passed are written off
+    /// first — the core never hears that an alarm fired, so this is the only
+    /// place that notices.
+    ///
+    /// # Errors
+    /// Fails on a storage error. A single reminder that cannot be armed is
+    /// logged and skipped rather than stopping the rest.
+    pub fn top_up_windows(&self) -> AppResult<u32> {
+        let now = self.clock.now();
+        self.reminders.mark_elapsed(now)?;
+
+        let configured_default = self.reminders.default_sound_id()?;
+        let alarms = Arc::clone(&self.alarms);
+        let mut added = 0;
+
+        for thin in self.reminders.thin_windows(now, WINDOW)? {
+            let Ok(zone) = parse_zone(&thin.reminder.timezone) else {
+                tracing::warn!("a repeating reminder carries a zone this build does not know");
+                continue;
+            };
+            let Ok(sound) = resolve_sound(&thin.reminder.sound, configured_default.as_deref())
+            else {
+                tracing::warn!("a repeating reminder names a sound this build does not have");
+                continue;
+            };
+            let Ok(anchor) = thin.reminder.scheduled_at.to_zoned(zone) else {
+                continue;
+            };
+
+            let instants = recurrence::window(
+                anchor.naive_local(),
+                zone,
+                thin.reminder.recurrence,
+                now,
+                WINDOW,
+            );
+            match self
+                .reminders
+                .extend_window(&thin.reminder, &instants, &mut |next| {
+                    alarms.schedule(&alarm_from(next, sound))
+                }) {
+                Ok(count) => added += count,
+                Err(error) => tracing::warn!(%error, "a repeating reminder could not be extended"),
+            }
+        }
+
+        if added > 0 {
+            tracing::info!(added, "repeating reminders armed further ahead");
+        }
+        Ok(added)
     }
 
     /// Cancels and soft-deletes a note reminder.
@@ -224,10 +296,10 @@ impl ReminderUseCases {
         let note_id = NoteId::parse(note_id)?;
         let configured_default = self.reminders.default_sound_id()?;
         let alarms = Arc::clone(&self.alarms);
-        let mut cancelled: Option<ScheduledReminder> = None;
-        let result = self.reminders.delete_for_note(note_id, &mut |current| {
-            cancelled = Some(current.clone());
-            alarms.cancel(current.occurrence.alarm_request_code)
+        let mut cancelled: Vec<i32> = Vec::new();
+        let result = self.reminders.delete_for_note(note_id, &mut |code| {
+            cancelled.push(code);
+            alarms.cancel(code)
         });
 
         match result {
@@ -241,11 +313,18 @@ impl ReminderUseCases {
             }
             Ok(None) => Ok(None),
             Err(error) => {
-                if let Some(previous) = cancelled {
-                    if let Ok(sound) =
-                        resolve_sound(&previous.reminder.sound, configured_default.as_deref())
+                // The rows are still there after the rollback, so the alarms
+                // that were taken back have to go back on.
+                if !cancelled.is_empty() {
+                    if let Ok(Some(current)) = self
+                        .reminders
+                        .find_active_for_note(note_id, self.clock.now())
                     {
-                        let _ = self.alarms.schedule(&alarm_from(&previous, sound));
+                        if let Ok(sound) =
+                            resolve_sound(&current.reminder.sound, configured_default.as_deref())
+                        {
+                            let _ = self.alarms.schedule(&alarm_from(&current, sound));
+                        }
                     }
                 }
                 Err(error)
@@ -556,6 +635,7 @@ mod tests {
             scheduled_at: 2_000,
             timezone: "Asia/Almaty".into(),
             sound: "default".into(),
+            recurrence: None,
         }
     }
 

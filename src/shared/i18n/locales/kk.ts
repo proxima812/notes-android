@@ -58,6 +58,14 @@ export const kk: Dictionary = {
   "reminder.presetAdd": "Қосу",
   "reminder.presetRemove": "{time} үлгісін жою",
 
+  "reminder.repeat": "Қайталау",
+  "reminder.repeatNever": "Қайталамау",
+  "reminder.repeat.daily": "Күн сайын",
+  "reminder.repeat.weekdays": "Жұмыс күндері",
+  "reminder.repeat.weekly": "Апта сайын",
+  "reminder.repeat.monthly": "Ай сайын",
+  "reminder.repeat.yearly": "Жыл сайын",
+
   "backup.title": "Сақтық көшірме",
   "backup.description": "Көшірме сіз қойған жерде ғана сақталады. Қолданба ешқайда ештеңе жібермейді.",
   "backup.export": "Көшірме сақтау",

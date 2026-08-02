@@ -72,6 +72,14 @@ export const ru = {
   "reminder.presetAdd": "Добавить",
   "reminder.presetRemove": "Удалить шаблон {time}",
 
+  "reminder.repeat": "Повтор",
+  "reminder.repeatNever": "Не повторять",
+  "reminder.repeat.daily": "Каждый день",
+  "reminder.repeat.weekdays": "По будням",
+  "reminder.repeat.weekly": "Каждую неделю",
+  "reminder.repeat.monthly": "Каждый месяц",
+  "reminder.repeat.yearly": "Каждый год",
+
   "backup.title": "Резервная копия",
   "backup.description": "Копия хранится только там, где вы её положите. Приложение ничего никуда не отправляет.",
   "backup.export": "Сохранить копию",

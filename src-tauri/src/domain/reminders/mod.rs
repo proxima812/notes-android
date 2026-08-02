@@ -63,9 +63,13 @@ pub struct Reminder {
     pub note_id: NoteId,
     pub title: String,
     pub body: String,
+    /// The reading the user picked, as an instant in [`Self::timezone`]. Every
+    /// repeat is measured from here rather than from the last one that fired.
     pub scheduled_at: Timestamp,
     pub timezone: String,
     pub sound: String,
+    /// `None` for a reminder that happens once.
+    pub recurrence: Option<Recurrence>,
     pub is_enabled: bool,
 }
 
@@ -92,6 +96,10 @@ pub struct ReminderDraft {
     pub scheduled_at: Timestamp,
     pub timezone: String,
     pub sound: String,
+    pub recurrence: Option<Recurrence>,
+    /// The instants to arm, already expanded from the recurrence by the use
+    /// case. Persistence writes what it is given and works out none of it.
+    pub occurrences: Vec<Timestamp>,
 }
 
 #[cfg(test)]

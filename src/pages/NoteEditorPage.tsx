@@ -255,6 +255,7 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
                   scheduledAt: value.scheduledAt,
                   timezone: deviceTimeZone(),
                   sound: value.sound,
+                  recurrence: value.recurrence,
                 });
               }}
               onDelete={() => {

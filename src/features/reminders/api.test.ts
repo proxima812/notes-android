@@ -20,6 +20,7 @@ describe("reminder bridge schemas", () => {
       effectiveSoundId: "death_and_rebirth",
       effectiveSoundLabel: "Death & Rebirth",
       isExact: true,
+      recurrence: null,
     });
 
     expect(reminder.effectiveSoundId).toBe("death_and_rebirth");

@@ -421,6 +421,9 @@ pub struct UpsertReminderRequest {
     pub scheduled_at: i64,
     pub timezone: String,
     pub sound: String,
+    /// RFC 5545 rule, or absent for a reminder that happens once.
+    #[serde(default)]
+    pub recurrence: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -437,6 +440,8 @@ pub struct ReminderDto {
     pub effective_sound_id: String,
     pub effective_sound_label: String,
     pub is_exact: bool,
+    /// RFC 5545 rule, or absent when the reminder happens once.
+    pub recurrence: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -490,6 +495,10 @@ impl From<ReminderView> for ReminderDto {
             effective_sound_id: view.effective_sound.id.to_owned(),
             effective_sound_label: view.effective_sound.label.to_owned(),
             is_exact: scheduled.occurrence.is_exact,
+            recurrence: scheduled
+                .reminder
+                .recurrence
+                .map(|rule| rule.rule().to_owned()),
         }
     }
 }
@@ -664,6 +673,7 @@ mod tests {
             effective_sound_id: "death_and_rebirth".to_owned(),
             effective_sound_label: "Death & Rebirth".to_owned(),
             is_exact: false,
+            recurrence: None,
         })
         .expect("serialises");
 
@@ -694,6 +704,7 @@ mod tests {
                     scheduled_at: Timestamp::from_millis(2_000),
                     timezone: "Asia/Almaty".into(),
                     sound: "default".into(),
+                    recurrence: None,
                     is_enabled: true,
                 },
                 occurrence: ReminderOccurrence {

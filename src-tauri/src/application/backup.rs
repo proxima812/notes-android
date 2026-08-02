@@ -335,10 +335,8 @@ mod tests {
         fn upsert_for_note(
             &self,
             _draft: ReminderDraft,
-            _schedule: &mut dyn FnMut(
-                Option<&ScheduledReminder>,
-                &ScheduledReminder,
-            ) -> AppResult<bool>,
+            _arm: &mut dyn FnMut(&ScheduledReminder) -> AppResult<bool>,
+            _disarm: &mut dyn FnMut(i32) -> AppResult<()>,
         ) -> AppResult<ScheduledReminder> {
             unreachable!("not used by backup")
         }
@@ -346,7 +344,7 @@ mod tests {
         fn delete_for_note(
             &self,
             _note_id: NoteId,
-            _cancel: &mut dyn FnMut(&ScheduledReminder) -> AppResult<()>,
+            _disarm: &mut dyn FnMut(i32) -> AppResult<()>,
         ) -> AppResult<Option<ScheduledReminder>> {
             Ok(None)
         }
@@ -358,6 +356,27 @@ mod tests {
             _zone: &str,
         ) -> AppResult<ScheduledReminder> {
             unreachable!("not used by backup")
+        }
+
+        fn mark_elapsed(&self, _now: Timestamp) -> AppResult<u32> {
+            Ok(0)
+        }
+
+        fn thin_windows(
+            &self,
+            _now: Timestamp,
+            _target: usize,
+        ) -> AppResult<Vec<crate::domain::reminders::repository::ThinWindow>> {
+            Ok(Vec::new())
+        }
+
+        fn extend_window(
+            &self,
+            _reminder: &crate::domain::reminders::Reminder,
+            _instants: &[Timestamp],
+            _arm: &mut dyn FnMut(&ScheduledReminder) -> AppResult<bool>,
+        ) -> AppResult<u32> {
+            Ok(0)
         }
 
         fn active_scheduled(&self, _now: Timestamp) -> AppResult<Vec<ScheduledReminder>> {
@@ -528,6 +547,7 @@ mod tests {
                 scheduled_at: Timestamp::from_millis(9_000),
                 timezone: "Asia/Almaty".into(),
                 sound: "default".into(),
+                recurrence: None,
                 is_enabled: true,
             },
             occurrence: ReminderOccurrence {

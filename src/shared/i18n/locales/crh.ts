@@ -59,6 +59,14 @@ export const crh: Dictionary = {
   "reminder.presetAdd": "Qoş",
   "reminder.presetRemove": "{time} qalıbını sil",
 
+  "reminder.repeat": "Tekrarlama",
+  "reminder.repeatNever": "Tekrarlanmasın",
+  "reminder.repeat.daily": "Er kün",
+  "reminder.repeat.weekdays": "İş künleri",
+  "reminder.repeat.weekly": "Er afta",
+  "reminder.repeat.monthly": "Er ay",
+  "reminder.repeat.yearly": "Er yıl",
+
   "backup.title": "Zapas nusxa",
   "backup.description": "Nusxa siz qoygan yerde saqlana. Uygulama iç bir yerge iç bir şey yollamay.",
   "backup.export": "Nusxa saqla",

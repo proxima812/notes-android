@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Languages, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { reconcileReminderZone } from "@/features/reminders/api";
+import { reconcileReminderZone, topUpReminders } from "@/features/reminders/api";
 import { useReminderLaunchTarget } from "@/features/reminders/useReminderLaunchTarget";
 import { LanguagePicker } from "@/features/settings/ui/LanguagePicker";
 import { SettingsPage } from "@/features/settings/ui/SettingsPage";
@@ -39,10 +39,14 @@ function Shell(): React.JSX.Element {
   // zone, so the question is asked once per start and is usually answered
   // "nothing moved".
   useEffect(() => {
-    void reconcileReminderZone().catch(() => {
-      // The app must still open. A reminder left in yesterday's zone is worth
-      // less than a start screen that refuses to appear.
-    });
+    void reconcileReminderZone()
+      // Topping up after the move, so a repeat is armed further ahead at the
+      // instants the new zone gives it rather than the old one.
+      .then(topUpReminders)
+      .catch(() => {
+        // The app must still open. A reminder left in yesterday's zone is worth
+        // less than a start screen that refuses to appear.
+      });
   }, []);
 
   // A tapped reminder overrides whatever was on screen, including a note the

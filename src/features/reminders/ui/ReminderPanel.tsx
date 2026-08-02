@@ -3,7 +3,13 @@ import { useEffect, useState, type FormEvent } from "react";
 
 import { useT } from "@/shared/i18n";
 
-import type { Reminder } from "../api";
+import {
+  RECURRENCE_IDS,
+  RECURRENCE_RULES,
+  recurrenceIdOf,
+  type Reminder,
+  type RecurrenceId,
+} from "../api";
 
 interface SoundCatalog {
   readonly defaultSoundId: string;
@@ -17,6 +23,8 @@ export interface ReminderFormValue {
   readonly title: string;
   readonly scheduledAt: number;
   readonly sound: string;
+  /** RFC 5545 rule, or `null` when the reminder happens once. */
+  readonly recurrence: string | null;
 }
 
 interface ReminderPanelProps {
@@ -97,6 +105,9 @@ export function ReminderPanel({
   const [date, setDate] = useState(initialDateTime.date);
   const [time, setTime] = useState(initialDateTime.time);
   const [sound, setSound] = useState(initial?.sound ?? "default");
+  const [repeat, setRepeat] = useState<RecurrenceId | "">(
+    recurrenceIdOf(initial?.recurrence ?? null) ?? "",
+  );
   const [localError, setLocalError] = useState<string | null>(null);
   const [editingPresets, setEditingPresets] = useState(false);
   const [draftPreset, setDraftPreset] = useState("");
@@ -107,6 +118,7 @@ export function ReminderPanel({
     setDate(next.date);
     setTime(next.time);
     setSound(initial?.sound ?? "default");
+    setRepeat(recurrenceIdOf(initial?.recurrence ?? null) ?? "");
     setLocalError(null);
   }, [initial, noteTitle]);
 
@@ -137,7 +149,12 @@ export function ReminderPanel({
     }
 
     setLocalError(null);
-    onSave({ title: title.trim(), scheduledAt, sound });
+    onSave({
+      title: title.trim(),
+      scheduledAt,
+      sound,
+      recurrence: repeat === "" ? null : RECURRENCE_RULES[repeat],
+    });
   };
 
   return (
@@ -298,6 +315,27 @@ export function ReminderPanel({
             </div>
           )}
         </div>
+
+        <label className="text-content-muted block text-sm">
+          {t("reminder.repeat")}
+          <PickerField className="mt-1">
+            <select
+              value={repeat}
+              onChange={(event) => {
+                setRepeat(event.target.value as RecurrenceId | "");
+                setLocalError(null);
+              }}
+              className={PICKER_CLASSES}
+            >
+              <option value="">{t("reminder.repeatNever")}</option>
+              {RECURRENCE_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {t(`reminder.repeat.${id}` as Parameters<typeof t>[0])}
+                </option>
+              ))}
+            </select>
+          </PickerField>
+        </label>
 
         <fieldset>
           <legend className="text-content-muted mb-1 text-sm">{t("reminder.sound")}</legend>

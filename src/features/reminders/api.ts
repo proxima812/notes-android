@@ -55,6 +55,31 @@ export const reminderSoundCatalogSchema = z.object({
   items: z.array(reminderSoundSchema).min(1),
 });
 
+/**
+ * The repeats the app offers, as the RFC 5545 rules the core stores.
+ *
+ * The core refuses anything outside this set rather than approximating it, so
+ * the two lists have to stay in step.
+ */
+export const RECURRENCE_RULES = {
+  daily: "FREQ=DAILY",
+  weekdays: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR",
+  weekly: "FREQ=WEEKLY",
+  monthly: "FREQ=MONTHLY",
+  yearly: "FREQ=YEARLY",
+} as const;
+
+export type RecurrenceId = keyof typeof RECURRENCE_RULES;
+
+export const RECURRENCE_IDS = Object.keys(RECURRENCE_RULES) as RecurrenceId[];
+
+/** The id for a stored rule, or `null` for a reminder that happens once. */
+export function recurrenceIdOf(rule: string | null): RecurrenceId | null {
+  return (
+    RECURRENCE_IDS.find((id) => RECURRENCE_RULES[id] === rule) ?? null
+  );
+}
+
 export const reminderSchema = z.object({
   id: brandedReminderId,
   noteId: brandedNoteId,
@@ -67,6 +92,7 @@ export const reminderSchema = z.object({
   effectiveSoundId: z.string().min(1),
   effectiveSoundLabel: z.string().min(1),
   isExact: z.boolean(),
+  recurrence: z.string().nullable(),
 });
 
 export type Reminder = z.infer<typeof reminderSchema>;
@@ -80,6 +106,8 @@ export interface UpsertReminderRequest {
   readonly scheduledAt: number;
   readonly timezone: string;
   readonly sound: string;
+  /** RFC 5545 rule, or `null` for a reminder that happens once. */
+  readonly recurrence: string | null;
 }
 
 export async function getReminderForNote(noteIdValue: NoteId): Promise<Reminder | null> {
@@ -124,6 +152,16 @@ export async function reconcileReminderZone(): Promise<number> {
   return callCommand("reminders_reconcile_zone", z.number().int(), {
     timezone: deviceTimeZone(),
   });
+}
+
+/**
+ * Arms repeating reminders further ahead.
+ *
+ * A repeat survives on the firings armed in advance of it, because nothing
+ * wakes the core when one goes off. Asked on every start.
+ */
+export async function topUpReminders(): Promise<number> {
+  return callCommand("reminders_top_up", z.number().int());
 }
 
 export async function listReminderSounds(): Promise<ReminderSoundCatalog> {

@@ -205,6 +205,16 @@ pub async fn reminders_reconcile_zone(
     Ok(blocking(move || reminders.reconcile_zone(&timezone)).await)
 }
 
+/// Arms repeating reminders further ahead.
+///
+/// Asked on every start: nothing wakes the core when an alarm fires, so a
+/// repeat lives on the firings armed in advance of it.
+#[tauri::command]
+pub async fn reminders_top_up(state: State<'_, AppState>) -> Result<CommandResult<u32>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.top_up_windows()).await)
+}
+
 #[tauri::command]
 pub async fn reminder_sounds_list(
     state: State<'_, AppState>,

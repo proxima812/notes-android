@@ -58,6 +58,14 @@ export const tt: Dictionary = {
   "reminder.presetAdd": "Өстәү",
   "reminder.presetRemove": "{time} калыбын бетерү",
 
+  "reminder.repeat": "Кабатлау",
+  "reminder.repeatNever": "Кабатламаска",
+  "reminder.repeat.daily": "Һәр көн",
+  "reminder.repeat.weekdays": "Эш көннәрендә",
+  "reminder.repeat.weekly": "Һәр атна",
+  "reminder.repeat.monthly": "Һәр ай",
+  "reminder.repeat.yearly": "Һәр ел",
+
   "backup.title": "Резерв күчермә",
   "backup.description": "Күчермә сез куйган урында гына саклана. Кушымта беркая да бернәрсә җибәрми.",
   "backup.export": "Күчермә саклау",
