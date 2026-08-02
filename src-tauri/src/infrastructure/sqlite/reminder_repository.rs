@@ -99,30 +99,6 @@ fn map_scheduled(row: &Row<'_>) -> rusqlite::Result<ScheduledReminder> {
     })
 }
 
-fn fetch_active(
-    transaction: &Transaction<'_>,
-    note_id: NoteId,
-    now: Timestamp,
-) -> AppResult<Option<ScheduledReminder>> {
-    transaction
-        .query_row(
-            &format!(
-                "{SELECT_SCHEDULED}
-                 WHERE r.note_id = ?1
-                   AND r.deleted_at IS NULL
-                   AND r.is_enabled = 1
-                   AND o.state IN ('scheduled', 'snoozed')
-                   AND o.occurrence_at > ?2
-                 ORDER BY o.occurrence_at
-                 LIMIT 1"
-            ),
-            params![note_id, now.as_millis()],
-            map_scheduled,
-        )
-        .optional()
-        .map_err(AppError::from)
-}
-
 fn fetch_current(
     transaction: &Transaction<'_>,
     reminder_id: ReminderId,
