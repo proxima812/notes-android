@@ -1,14 +1,28 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Languages, Settings } from "lucide-react";
-import { useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 
+import { listAppIcons } from "@/features/appearance/api";
+import { reconcileReminderZone, topUpReminders } from "@/features/reminders/api";
 import { useReminderLaunchTarget } from "@/features/reminders/useReminderLaunchTarget";
 import { LanguagePicker } from "@/features/settings/ui/LanguagePicker";
 import { SettingsPage } from "@/features/settings/ui/SettingsPage";
 import { LibraryPage } from "@/pages/LibraryPage";
-import { NoteEditorPage } from "@/pages/NoteEditorPage";
+
 import { I18nProvider, useT } from "@/shared/i18n";
 import type { NoteId } from "@/shared/types/ids";
+
+/**
+ * The editor is loaded when a note is opened, not before.
+ *
+ * It carries the whole rich-text stack, which is most of the JavaScript in the
+ * app and none of what the library screen needs. Paying for it on every cold
+ * start bought nothing: the first thing anyone sees is a list.
+ */
+const NoteEditorPage = lazy(async () => {
+  const module = await import("@/pages/NoteEditorPage");
+  return { default: module.NoteEditorPage };
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,6 +34,18 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+/**
+ * Shown for the moment the editor takes to arrive.
+ *
+ * Deliberately the same wording and placement the editor itself uses while it
+ * reads the note, so opening a note does not flash two different waiting
+ * states one after the other.
+ */
+function EditorLoading(): React.JSX.Element {
+  const t = useT();
+  return <p className="text-content-muted p-4 text-sm">{t("common.loading")}</p>;
+}
 
 type Route = { readonly kind: "library" } | { readonly kind: "note"; readonly id: NoteId } | { readonly kind: "settings" };
 
@@ -33,6 +59,29 @@ function Shell(): React.JSX.Element {
   const [languageOpen, setLanguageOpen] = useState(false);
   const t = useT();
 
+  // A reminder means a time on a clock, so crossing a border has to move the
+  // instant rather than the time. Nothing announces that the device changed
+  // zone, so the question is asked once per start and is usually answered
+  // "nothing moved".
+  useEffect(() => {
+    void reconcileReminderZone()
+      // Topping up after the move, so a repeat is armed further ahead at the
+      // instants the new zone gives it rather than the old one.
+      .then(topUpReminders)
+      .catch(() => {
+        // The app must still open. A reminder left in yesterday's zone is worth
+        // less than a start screen that refuses to appear.
+      });
+
+    // Asking which icon is showing also puts right an update that left two of
+    // them enabled — component states the app set survive an install, and the
+    // manifest enables its own default on top of them.
+    void listAppIcons().catch(() => {
+      // Off-device there is no launcher to ask, and that is not an error worth
+      // showing on the first screen.
+    });
+  }, []);
+
   // A tapped reminder overrides whatever was on screen, including a note the
   // user had left open: they asked for this note, just now, by tapping it.
   useReminderLaunchTarget((id) => {
@@ -45,7 +94,11 @@ function Shell(): React.JSX.Element {
   };
 
   if (route.kind === "note") {
-    return <NoteEditorPage id={route.id} onBack={toLibrary} />;
+    return (
+      <Suspense fallback={<EditorLoading />}>
+        <NoteEditorPage id={route.id} onBack={toLibrary} />
+      </Suspense>
+    );
   }
 
   if (route.kind === "settings") {

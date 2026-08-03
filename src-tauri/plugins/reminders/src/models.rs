@@ -26,6 +26,8 @@ pub struct ScheduleRequest {
     /// Human-readable channel label shown in Android settings.
     pub sound_label: String,
     pub vibrate: bool,
+    /// Minutes the notification's "later" button moves the reminder by.
+    pub snooze_minutes: i64,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -52,6 +54,13 @@ pub struct LaunchTarget {
 #[serde(rename_all = "camelCase")]
 pub struct CancelRequest {
     pub request_code: i32,
+}
+
+/// How many alarms were taken back, for the log.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CancelAllResponse {
+    pub cancelled: u32,
 }
 
 /// Mirrors the states Tauri's Android permission layer reports.
@@ -121,6 +130,7 @@ mod tests {
             sound_id: "death_and_rebirth".into(),
             sound_label: "Death & Rebirth".into(),
             vibrate: true,
+            snooze_minutes: 10,
         })
         .expect("serializes");
 
@@ -128,6 +138,10 @@ mod tests {
         assert_eq!(value["soundLabel"], "Death & Rebirth");
         assert_eq!(value["vibrate"], true);
         assert_eq!(value["noteId"], "note");
+        assert_eq!(
+            value["snoozeMinutes"], 10,
+            "the Kotlin side reads this key, so the casing is part of the contract"
+        );
     }
 
     #[test]

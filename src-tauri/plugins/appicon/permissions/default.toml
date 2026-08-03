@@ -1,0 +1,6 @@
+[default]
+description = """
+Grants the WebView nothing. The launcher icon is switched by the Rust core,
+which reaches Android through this plugin directly.
+"""
+permissions = []

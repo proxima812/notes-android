@@ -34,4 +34,10 @@ android {
 dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation(project(":tauri-android"))
+
+    testImplementation("junit:junit:4.13.2")
+    // The `org.json` bundled with the Android SDK is a stub that throws in unit
+    // tests. The real implementation on the test classpath is what lets the
+    // alarm journal be tested without an emulator.
+    testImplementation("org.json:json:20240303")
 }

@@ -7,16 +7,16 @@
 use std::sync::Arc;
 
 use crate::domain::clock::{SharedClock, Timestamp};
-use crate::domain::ids::NoteId;
+use crate::domain::ids::{NoteId, ReminderId};
 use crate::domain::notes::{
     validate_content, validate_title, Note, NoteRepository, Page, PageRequest,
 };
 use crate::domain::reminders::{
-    resolve_sound, sound_presets, ReminderDraft, ReminderRepository, ScheduledReminder,
-    SoundPreset, FALLBACK_SOUND_ID,
+    parse_zone, recurrence, reinterpret, resolve_sound, sound_presets, time_presets, Recurrence,
+    ReminderDraft, ReminderRepository, ScheduledReminder, SoundPreset, FALLBACK_SOUND_ID, WINDOW,
 };
 use crate::domain::search::{SearchHit, SearchRepository};
-use crate::error::{AppError, AppResult, NotificationError, ValidationError};
+use crate::error::{AppError, AppResult, NotificationError, ReminderError, ValidationError};
 use crate::platform::{Alarm, AlarmClock};
 
 use super::dto::{ListNotesRequest, SearchRequest, UpsertReminderRequest};
@@ -125,15 +125,16 @@ impl ReminderUseCases {
         }
     }
 
-    /// Returns the future active reminder for a note.
+    /// Every reminder on a note, soonest first.
     ///
     /// # Errors
     /// Fails for a malformed note id, invalid sound setting, or storage errors.
-    pub fn get_for_note(&self, note_id: &str) -> AppResult<Option<ReminderView>> {
+    pub fn list_for_note(&self, note_id: &str) -> AppResult<Vec<ReminderView>> {
         let note_id = NoteId::parse(note_id)?;
         let configured_default = self.reminders.default_sound_id()?;
         self.reminders
-            .find_active_for_note(note_id, self.clock.now())?
+            .list_for_note(note_id, self.clock.now())?
+            .into_iter()
             .map(|scheduled| {
                 let effective_sound =
                     resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
@@ -142,10 +143,14 @@ impl ReminderUseCases {
                     effective_sound,
                 })
             })
-            .transpose()
+            .collect()
     }
 
-    /// Creates or replaces the note's one active reminder.
+    /// Creates or replaces the note's reminder and everything armed for it.
+    ///
+    /// A repeating reminder is armed several firings ahead. Nothing wakes the
+    /// core when an alarm goes off, so the window is what keeps a repeat alive
+    /// on a phone nobody opens; it is topped up on the next start.
     ///
     /// # Errors
     /// Fails on validation, denied notifications, storage, or platform errors.
@@ -163,11 +168,12 @@ impl ReminderUseCases {
         }
         validate_title(title)?;
         validate_content(&request.body)?;
-        if request.timezone.parse::<chrono_tz::Tz>().is_err() {
-            return Err(AppError::Validation(ValidationError::UnknownTimeZone {
-                value: request.timezone,
-            }));
-        }
+        let zone = parse_zone(&request.timezone)?;
+        let recurrence = request
+            .recurrence
+            .as_deref()
+            .map(Recurrence::parse)
+            .transpose()?;
 
         let configured_default = self.reminders.default_sound_id()?;
         let effective_sound = resolve_sound(&request.sound, configured_default.as_deref())?;
@@ -178,22 +184,47 @@ impl ReminderUseCases {
             ));
         }
 
+        let anchor = scheduled_at.to_zoned(zone)?.naive_local();
+        let occurrences = recurrence::window(
+            anchor,
+            zone,
+            recurrence,
+            self.clock.now(),
+            if recurrence.is_some() { WINDOW } else { 1 },
+        );
+        if occurrences.is_empty() {
+            return Err(AppError::Reminder(ReminderError::NoFutureOccurrence));
+        }
+
         let draft = ReminderDraft {
+            reminder_id: request
+                .reminder_id
+                .as_deref()
+                .map(ReminderId::parse)
+                .transpose()?,
             note_id,
             title: title.to_owned(),
             body: request.body,
             scheduled_at,
             timezone: request.timezone,
             sound: request.sound,
+            recurrence,
+            occurrences,
         };
+
         let alarms = Arc::clone(&self.alarms);
-        let mut applied: Option<(Option<ScheduledReminder>, ScheduledReminder)> = None;
-        let result = self
-            .reminders
-            .upsert_for_note(draft, &mut |previous, next| {
-                applied = Some((previous.cloned(), next.clone()));
+        // Whatever was armed before the failure has to come back off: the
+        // transaction rolls the rows back, and an alarm with no row behind it
+        // would fire for a reminder that does not exist.
+        let mut armed: Vec<i32> = Vec::new();
+        let result = self.reminders.save_for_note(
+            draft,
+            &mut |next| {
+                armed.push(next.occurrence.alarm_request_code);
                 alarms.schedule(&alarm_from(next, effective_sound))
-            });
+            },
+            &mut |code| alarms.cancel(code),
+        );
 
         match result {
             Ok(scheduled) => Ok(ReminderView {
@@ -201,56 +232,102 @@ impl ReminderUseCases {
                 effective_sound,
             }),
             Err(error) => {
-                if let Some((previous, next)) = applied {
-                    let _ = self.alarms.cancel(next.occurrence.alarm_request_code);
-                    if let Some(old) = previous {
-                        if let Ok(old_sound) =
-                            resolve_sound(&old.reminder.sound, configured_default.as_deref())
-                        {
-                            let _ = self.alarms.schedule(&alarm_from(&old, old_sound));
-                        }
-                    }
+                for code in armed {
+                    let _ = self.alarms.cancel(code);
                 }
                 Err(error)
             }
         }
     }
 
-    /// Cancels and soft-deletes a note reminder.
+    /// Tops every repeating reminder back up to a full window of firings.
+    ///
+    /// Asked on each start. Occurrences whose time has passed are written off
+    /// first — the core never hears that an alarm fired, so this is the only
+    /// place that notices.
+    ///
+    /// # Errors
+    /// Fails on a storage error. A single reminder that cannot be armed is
+    /// logged and skipped rather than stopping the rest.
+    pub fn top_up_windows(&self) -> AppResult<u32> {
+        let now = self.clock.now();
+        self.reminders.mark_elapsed(now)?;
+
+        let configured_default = self.reminders.default_sound_id()?;
+        let alarms = Arc::clone(&self.alarms);
+        let mut added = 0;
+
+        for thin in self.reminders.thin_windows(now, WINDOW)? {
+            let Ok(zone) = parse_zone(&thin.reminder.timezone) else {
+                tracing::warn!("a repeating reminder carries a zone this build does not know");
+                continue;
+            };
+            let Ok(sound) = resolve_sound(&thin.reminder.sound, configured_default.as_deref())
+            else {
+                tracing::warn!("a repeating reminder names a sound this build does not have");
+                continue;
+            };
+            let Ok(anchor) = thin.reminder.scheduled_at.to_zoned(zone) else {
+                continue;
+            };
+
+            let instants = recurrence::window(
+                anchor.naive_local(),
+                zone,
+                thin.reminder.recurrence,
+                now,
+                WINDOW,
+            );
+            match self
+                .reminders
+                .extend_window(&thin.reminder, &instants, &mut |next| {
+                    alarms.schedule(&alarm_from(next, sound))
+                }) {
+                Ok(count) => added += count,
+                Err(error) => tracing::warn!(%error, "a repeating reminder could not be extended"),
+            }
+        }
+
+        if added > 0 {
+            tracing::info!(added, "repeating reminders armed further ahead");
+        }
+        Ok(added)
+    }
+
+    /// Cancels and soft-deletes one reminder.
+    ///
+    /// # Errors
+    /// Fails for a malformed identifier, storage errors, or platform errors.
+    pub fn delete(&self, reminder_id: &str) -> AppResult<Option<ReminderView>> {
+        let reminder_id = ReminderId::parse(reminder_id)?;
+        let configured_default = self.reminders.default_sound_id()?;
+        let alarms = Arc::clone(&self.alarms);
+
+        let scheduled = self
+            .reminders
+            .delete(reminder_id, &mut |code| alarms.cancel(code))?;
+
+        scheduled
+            .map(|scheduled| {
+                let effective_sound =
+                    resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
+                Ok(ReminderView {
+                    scheduled,
+                    effective_sound,
+                })
+            })
+            .transpose()
+    }
+
+    /// Cancels every reminder on a note, for when the note itself goes.
     ///
     /// # Errors
     /// Fails for a malformed note id, storage errors, or platform errors.
-    pub fn delete_for_note(&self, note_id: &str) -> AppResult<Option<ReminderView>> {
+    pub fn delete_all_for_note(&self, note_id: &str) -> AppResult<u32> {
         let note_id = NoteId::parse(note_id)?;
-        let configured_default = self.reminders.default_sound_id()?;
         let alarms = Arc::clone(&self.alarms);
-        let mut cancelled: Option<ScheduledReminder> = None;
-        let result = self.reminders.delete_for_note(note_id, &mut |current| {
-            cancelled = Some(current.clone());
-            alarms.cancel(current.occurrence.alarm_request_code)
-        });
-
-        match result {
-            Ok(Some(scheduled)) => {
-                let effective_sound =
-                    resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
-                Ok(Some(ReminderView {
-                    scheduled,
-                    effective_sound,
-                }))
-            }
-            Ok(None) => Ok(None),
-            Err(error) => {
-                if let Some(previous) = cancelled {
-                    if let Ok(sound) =
-                        resolve_sound(&previous.reminder.sound, configured_default.as_deref())
-                    {
-                        let _ = self.alarms.schedule(&alarm_from(&previous, sound));
-                    }
-                }
-                Err(error)
-            }
-        }
+        self.reminders
+            .delete_all_for_note(note_id, &mut |code| alarms.cancel(code))
     }
 
     /// Returns the note a notification tap asked to open, once.
@@ -270,6 +347,56 @@ impl ReminderUseCases {
             .map(|id| id.to_string()))
     }
 
+    /// Re-renders every pending reminder in the zone the device is in now.
+    ///
+    /// A reminder is a time on a clock, not an instant: someone who asked to be
+    /// woken at 09:00 and then crossed two zones still means 09:00. Nothing
+    /// tells the app it has moved, so this is asked on every start and is a
+    /// no-op whenever it has not.
+    ///
+    /// Reminders whose stored zone this build cannot parse are left alone
+    /// rather than guessed at — moving one to the wrong instant would be worse
+    /// than leaving it where the user last saw it.
+    ///
+    /// # Errors
+    /// Fails when the device zone is unknown or on a storage error. A single
+    /// reminder that cannot be re-armed is logged and skipped.
+    pub fn reconcile_zone(&self, device_zone: &str) -> AppResult<u32> {
+        let target = parse_zone(device_zone)?;
+        let configured_default = self.reminders.default_sound_id()?;
+        let mut moved = 0;
+
+        for scheduled in self.reminders.active_scheduled(self.clock.now())? {
+            if scheduled.reminder.timezone == device_zone {
+                continue;
+            }
+            let Ok(origin) = parse_zone(&scheduled.reminder.timezone) else {
+                tracing::warn!("a reminder carries a zone this build does not know");
+                continue;
+            };
+
+            let at = reinterpret(scheduled.occurrence.occurrence_at, origin, target)?;
+            let updated = self.reminders.retime(&scheduled, at, device_zone)?;
+
+            let Ok(sound) = resolve_sound(&updated.reminder.sound, configured_default.as_deref())
+            else {
+                tracing::warn!("a moved reminder names a sound this build does not have");
+                continue;
+            };
+            // Re-arming replaces the alarm under the same request code, so the
+            // old instant is not left behind to fire as well.
+            match self.alarms.schedule(&alarm_from(&updated, sound)) {
+                Ok(_) => moved += 1,
+                Err(error) => tracing::warn!(%error, "a moved reminder could not be re-armed"),
+            }
+        }
+
+        if moved > 0 {
+            tracing::info!(moved, "reminders re-rendered in the device zone");
+        }
+        Ok(moved)
+    }
+
     /// Returns sound choices and the concrete global default.
     ///
     /// # Errors
@@ -283,9 +410,39 @@ impl ReminderUseCases {
             items: sound_presets().to_vec(),
         })
     }
+
+    /// The times offered for one-tap picking, as `HH:MM`.
+    ///
+    /// # Errors
+    /// Fails when the stored set cannot be read or is not the form this build
+    /// writes.
+    pub fn time_presets(&self) -> AppResult<Vec<String>> {
+        let stored = self.reminders.time_presets()?;
+        Ok(labels(&time_presets::parse_stored(stored.as_deref())?))
+    }
+
+    /// Replaces the whole set with the one the user now wants.
+    ///
+    /// The whole list is written rather than a diff applied, because "delete
+    /// one of the times we shipped" and "add one of my own" are the same edit
+    /// from the core's side: this is the set, keep it.
+    ///
+    /// # Errors
+    /// Fails when a value is not a real `HH:MM` time, when there are more of
+    /// them than the cap allows, or on a database error.
+    pub fn save_time_presets(&self, values: &[String]) -> AppResult<Vec<String>> {
+        let presets = time_presets::normalise(values)?;
+        self.reminders
+            .set_time_presets(&time_presets::serialise(&presets)?)?;
+        Ok(labels(&presets))
+    }
 }
 
-fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> Alarm {
+fn labels(presets: &[time_presets::TimePreset]) -> Vec<String> {
+    presets.iter().map(|preset| preset.label()).collect()
+}
+
+pub(super) fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> Alarm {
     Alarm {
         occurrence_id: scheduled.occurrence.id.to_string(),
         note_id: scheduled.reminder.note_id.to_string(),
@@ -297,6 +454,7 @@ fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> Alarm {
         sound_id: sound.resource_name.to_owned(),
         sound_label: sound.label.to_owned(),
         vibrate: true,
+        snooze_minutes: scheduled.reminder.snooze_minutes,
     }
 }
 
@@ -310,7 +468,7 @@ pub fn move_note_to_trash(
     id: &str,
 ) -> AppResult<()> {
     notes.move_to_trash(id)?;
-    if let Err(error) = reminders.delete_for_note(id) {
+    if let Err(error) = reminders.delete_all_for_note(id) {
         let _ = notes.restore(id);
         return Err(error);
     }
@@ -395,6 +553,7 @@ mod tests {
     struct FakeAlarmClock {
         scheduled: parking_lot::Mutex<Vec<Alarm>>,
         cancelled: parking_lot::Mutex<Vec<i32>>,
+        cancelled_everything: parking_lot::Mutex<bool>,
         launch_target: parking_lot::Mutex<Option<String>>,
         notifications_granted: bool,
         exact: bool,
@@ -408,6 +567,11 @@ mod tests {
 
         fn cancel(&self, request_code: i32) -> AppResult<()> {
             self.cancelled.lock().push(request_code);
+            Ok(())
+        }
+
+        fn cancel_all(&self) -> AppResult<()> {
+            *self.cancelled_everything.lock() = true;
             Ok(())
         }
 
@@ -464,13 +628,92 @@ mod tests {
 
     fn valid_reminder_request(note_id: NoteId) -> UpsertReminderRequest {
         UpsertReminderRequest {
+            reminder_id: None,
             note_id: note_id.to_string(),
             title: "Проверить".into(),
             body: "Текст".into(),
             scheduled_at: 2_000,
             timezone: "Asia/Almaty".into(),
             sound: "default".into(),
+            recurrence: None,
         }
+    }
+
+    #[test]
+    fn changing_country_keeps_the_time_on_the_clock() {
+        let fixture = reminder_fixture(true, true);
+        // 09:00 in Almaty, a long way in the future so it stays pending.
+        let almaty_nine = crate::domain::reminders::resolve(
+            chrono::NaiveDate::from_ymd_opt(2030, 8, 3)
+                .expect("date")
+                .and_hms_opt(9, 0, 0)
+                .expect("time"),
+            chrono_tz::Asia::Almaty,
+        );
+        fixture
+            .reminders
+            .upsert_for_note(UpsertReminderRequest {
+                scheduled_at: almaty_nine.as_millis(),
+                ..valid_reminder_request(fixture.note_id)
+            })
+            .expect("saves");
+
+        let moved = fixture
+            .reminders
+            .reconcile_zone("Europe/Moscow")
+            .expect("reconciles");
+
+        assert_eq!(moved, 1);
+        let view = fixture
+            .reminders
+            .list_for_note(&fixture.note_id.to_string())
+            .expect("reads")
+            .pop()
+            .expect("still there");
+        let local = view
+            .scheduled
+            .occurrence
+            .occurrence_at
+            .to_zoned(chrono_tz::Europe::Moscow)
+            .expect("representable");
+        assert_eq!(
+            local.format("%H:%M").to_string(),
+            "09:00",
+            "the reminder means nine in the morning wherever the user is"
+        );
+        assert_eq!(view.scheduled.reminder.timezone, "Europe/Moscow");
+    }
+
+    #[test]
+    fn staying_in_the_same_zone_moves_nothing() {
+        let fixture = reminder_fixture(true, true);
+        fixture
+            .reminders
+            .upsert_for_note(valid_reminder_request(fixture.note_id))
+            .expect("saves");
+        let armed = fixture.alarms.scheduled.lock().len();
+
+        let moved = fixture
+            .reminders
+            .reconcile_zone("Asia/Almaty")
+            .expect("reconciles");
+
+        assert_eq!(moved, 0);
+        assert_eq!(
+            fixture.alarms.scheduled.lock().len(),
+            armed,
+            "an app opened at home must not re-arm anything"
+        );
+    }
+
+    #[test]
+    fn an_unknown_device_zone_is_refused_rather_than_guessed() {
+        let fixture = reminder_fixture(true, true);
+        let error = fixture
+            .reminders
+            .reconcile_zone("Mars/Olympus")
+            .expect_err("must refuse");
+        assert_eq!(error.code(), "validation_unknown_timezone");
     }
 
     fn fixture() -> Fixture {
@@ -651,9 +894,9 @@ mod tests {
         assert_eq!(error.code(), "notification_permission_denied");
         assert!(fixture
             .reminders
-            .get_for_note(&fixture.note_id.to_string())
+            .list_for_note(&fixture.note_id.to_string())
             .expect("reads")
-            .is_none());
+            .is_empty());
     }
 
     #[test]

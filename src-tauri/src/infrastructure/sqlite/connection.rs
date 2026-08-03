@@ -102,6 +102,15 @@ impl Database {
         Ok(value)
     }
 
+    /// Exclusive access to the connection itself.
+    ///
+    /// Only restoring a backup needs this: it writes through SQLite's backup API
+    /// rather than through SQL, so it cannot borrow the connection the way
+    /// [`Self::with_connection`] hands it out.
+    pub(super) fn lock_connection(&self) -> parking_lot::MutexGuard<'_, Connection> {
+        self.connection.lock()
+    }
+
     /// Runs SQLite's own consistency check.
     ///
     /// # Errors

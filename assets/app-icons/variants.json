@@ -1,0 +1,42 @@
+[
+  {
+    "id": "ink",
+    "name": "Ink",
+    "description": "Исходный бренд: графитовый знак на светлой подложке.",
+    "accent": "#222020",
+    "svg": "svg/ink.svg",
+    "preview": "png/ink.png"
+  },
+  {
+    "id": "amber",
+    "name": "Amber",
+    "description": "Тёплая бумага и янтарный знак — «стикер на столе».",
+    "accent": "#E8862B",
+    "svg": "svg/amber.svg",
+    "preview": "png/amber.png"
+  },
+  {
+    "id": "midnight",
+    "name": "Midnight",
+    "description": "Тёмная подложка и мятный знак — под тёмную тему системы.",
+    "accent": "#4BE3B0",
+    "svg": "svg/midnight.svg",
+    "preview": "png/midnight.png"
+  },
+  {
+    "id": "paper",
+    "name": "Paper",
+    "description": "Контурный знак на кремовом фоне — самый лёгкий вариант.",
+    "accent": "#8A6A4B",
+    "svg": "svg/paper.svg",
+    "preview": "png/paper.png"
+  },
+  {
+    "id": "neon",
+    "name": "Neon",
+    "description": "Индиго-фиолетовый градиент и светлый знак с неоновой тенью.",
+    "accent": "#7C5CFF",
+    "svg": "svg/neon.svg",
+    "preview": "png/neon.png"
+  }
+]

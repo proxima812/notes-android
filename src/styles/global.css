@@ -256,6 +256,21 @@
     user-select: none;
   }
 
+  /* Chromium parks the arrow of a `select` and of a date or time input hard
+     against the field's right edge and ignores `padding-right` while doing it,
+     so the glyph reads as falling out of the control. Fields carrying this
+     class turn the native arrow off and have one drawn beside them instead, at
+     the same distance from the edge as the text keeps on the other side.
+     Tapping the field still opens the picker — that never depended on the
+     indicator being visible. */
+  .picker-field {
+    appearance: none;
+  }
+
+  .picker-field::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+
   /* Preflight strips heading sizes and list markers, so the editor body has to
      restate them; without this, formatting applies but looks like it did not. */
   .note-body {

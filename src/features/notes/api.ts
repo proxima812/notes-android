@@ -125,6 +125,8 @@ export type NoteSort = z.infer<typeof noteSortSchema>;
 export interface ListNotesRequest {
   readonly scope?: NoteScope;
   readonly sort?: NoteSort;
+  readonly folderId?: string | undefined;
+  readonly tagId?: string | undefined;
   readonly noteType?: NoteType;
   readonly pinnedOnly?: boolean;
   readonly limit?: number;

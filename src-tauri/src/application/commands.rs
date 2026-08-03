@@ -16,9 +16,10 @@ use crate::error::{AppError, AppResult, PlatformError};
 use crate::state::AppState;
 
 use super::dto::{
-    CommandResult, CreateNoteRequest, ListNotesRequest, NoteDto, NoteSummaryDto, PageDto,
-    ReminderDto, ReminderSoundCatalogDto, SearchHitDto, SearchRequest, UpdateNoteRequest,
-    UpsertReminderRequest,
+    AppIconCatalogDto, BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest,
+    FolderDto, ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, ReminderDto,
+    ReminderSoundCatalogDto, SearchHitDto, SearchRequest, TagDto, TaskDto, TaskProgressDto,
+    UpdateNoteRequest, UpsertReminderRequest,
 };
 use super::use_cases::move_note_to_trash;
 
@@ -151,15 +152,15 @@ pub async fn notes_duplicate(
 }
 
 #[tauri::command]
-pub async fn reminders_get_for_note(
+pub async fn reminders_list_for_note(
     state: State<'_, AppState>,
     note_id: String,
-) -> Result<CommandResult<Option<ReminderDto>>, ()> {
+) -> Result<CommandResult<Vec<ReminderDto>>, ()> {
     let reminders = Arc::clone(&state.reminders);
     Ok(blocking(move || {
         reminders
-            .get_for_note(&note_id)
-            .map(|value| value.map(ReminderDto::from))
+            .list_for_note(&note_id)
+            .map(|views| views.into_iter().map(ReminderDto::from).collect())
     })
     .await)
 }
@@ -174,12 +175,12 @@ pub async fn reminders_upsert_for_note(
 }
 
 #[tauri::command]
-pub async fn reminders_delete_for_note(
+pub async fn reminders_delete(
     state: State<'_, AppState>,
-    note_id: String,
+    reminder_id: String,
 ) -> Result<CommandResult<()>, ()> {
     let reminders = Arc::clone(&state.reminders);
-    Ok(blocking(move || reminders.delete_for_note(&note_id).map(|_| ())).await)
+    Ok(blocking(move || reminders.delete(&reminder_id).map(|_| ())).await)
 }
 
 /// Note a notification tap asked to open, or nothing if the app was opened the
@@ -192,12 +193,266 @@ pub async fn reminders_take_launch_target(
     Ok(blocking(move || reminders.take_launch_target()).await)
 }
 
+/// Re-renders pending reminders in the zone the device is in now.
+///
+/// Asked on every start: nothing notifies an app that it has changed country,
+/// and a reminder that means 09:00 has to keep meaning 09:00.
+#[tauri::command]
+pub async fn reminders_reconcile_zone(
+    state: State<'_, AppState>,
+    timezone: String,
+) -> Result<CommandResult<u32>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.reconcile_zone(&timezone)).await)
+}
+
+/// Arms repeating reminders further ahead.
+///
+/// Asked on every start: nothing wakes the core when an alarm fires, so a
+/// repeat lives on the firings armed in advance of it.
+#[tauri::command]
+pub async fn reminders_top_up(state: State<'_, AppState>) -> Result<CommandResult<u32>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.top_up_windows()).await)
+}
+
 #[tauri::command]
 pub async fn reminder_sounds_list(
     state: State<'_, AppState>,
 ) -> Result<CommandResult<ReminderSoundCatalogDto>, ()> {
     let reminders = Arc::clone(&state.reminders);
     Ok(blocking(move || reminders.sound_catalog().map(ReminderSoundCatalogDto::from)).await)
+}
+
+/// Writes a snapshot and asks the user where to keep it.
+///
+/// The picker blocks until the user decides, which is why this — like every
+/// other command here — runs on a blocking task rather than on the thread
+/// serving the WebView.
+#[tauri::command]
+pub async fn backup_export(
+    state: State<'_, AppState>,
+    timezone: String,
+) -> Result<CommandResult<BackupOutcomeDto>, ()> {
+    let backup = Arc::clone(&state.backup);
+    Ok(blocking(move || backup.export(&timezone).map(BackupOutcomeDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn backup_import(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<BackupOutcomeDto>, ()> {
+    let backup = Arc::clone(&state.backup);
+    Ok(blocking(move || backup.import().map(BackupOutcomeDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn backup_latest(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<Option<BackupRecordDto>>, ()> {
+    let backup = Arc::clone(&state.backup);
+    Ok(blocking(move || {
+        backup
+            .latest()
+            .map(|record| record.map(BackupRecordDto::from))
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn tasks_list_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<Vec<TaskDto>>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || {
+        tasks
+            .list_for_note(&note_id)
+            .map(|items| items.into_iter().map(TaskDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn tasks_create_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+    title: String,
+) -> Result<CommandResult<TaskDto>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || tasks.create_for_note(&note_id, &title).map(TaskDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn tasks_set_completed(
+    state: State<'_, AppState>,
+    id: String,
+    completed: bool,
+) -> Result<CommandResult<TaskDto>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || tasks.set_completed(&id, completed).map(TaskDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn tasks_delete(state: State<'_, AppState>, id: String) -> Result<CommandResult<()>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || tasks.delete(&id)).await)
+}
+
+#[tauri::command]
+pub async fn tasks_progress_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<TaskProgressDto>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || tasks.progress_for_note(&note_id).map(TaskProgressDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn tags_list(state: State<'_, AppState>) -> Result<CommandResult<Vec<TagDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .tags()
+            .map(|tags| tags.into_iter().map(TagDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn tags_ensure(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<CommandResult<TagDto>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || organisation.ensure_tag(&name).map(TagDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn tags_delete(state: State<'_, AppState>, id: String) -> Result<CommandResult<()>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || organisation.delete_tag(&id)).await)
+}
+
+#[tauri::command]
+pub async fn tags_of_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<Vec<TagDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .tags_of_note(&note_id)
+            .map(|tags| tags.into_iter().map(TagDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn tags_set_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+    tags: Vec<String>,
+) -> Result<CommandResult<Vec<TagDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .set_note_tags(&note_id, &tags)
+            .map(|tags| tags.into_iter().map(TagDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn folders_list(state: State<'_, AppState>) -> Result<CommandResult<Vec<FolderDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .folders()
+            .map(|folders| folders.into_iter().map(FolderDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn folders_create(
+    state: State<'_, AppState>,
+    name: String,
+) -> Result<CommandResult<FolderDto>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || organisation.create_folder(&name).map(FolderDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn folders_delete(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<CommandResult<()>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || organisation.delete_folder(&id)).await)
+}
+
+#[tauri::command]
+pub async fn folders_of_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<Vec<FolderDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .folders_of_note(&note_id)
+            .map(|folders| folders.into_iter().map(FolderDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn folders_set_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+    folders: Vec<String>,
+) -> Result<CommandResult<Vec<FolderDto>>, ()> {
+    let organisation = Arc::clone(&state.organisation);
+    Ok(blocking(move || {
+        organisation
+            .set_note_folders(&note_id, &folders)
+            .map(|folders| folders.into_iter().map(FolderDto::from).collect())
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn app_icons_list(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<AppIconCatalogDto>, ()> {
+    let icons = Arc::clone(&state.app_icons);
+    Ok(blocking(move || icons.catalog().map(AppIconCatalogDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn app_icons_select(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<CommandResult<AppIconCatalogDto>, ()> {
+    let icons = Arc::clone(&state.app_icons);
+    Ok(blocking(move || icons.select(&id).map(AppIconCatalogDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn reminder_time_presets_list(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<Vec<String>>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.time_presets()).await)
+}
+
+#[tauri::command]
+pub async fn reminder_time_presets_save(
+    state: State<'_, AppState>,
+    presets: Vec<String>,
+) -> Result<CommandResult<Vec<String>>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.save_time_presets(&presets)).await)
 }
 
 #[tauri::command]

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Check } from "lucide-react";
 
+import { BackupSection } from "@/features/backup/ui/BackupSection";
 import { appInfo } from "@/features/notes/api";
 import { describeError } from "@/shared/api/errors";
 import { useT } from "@/shared/i18n";
@@ -114,6 +115,8 @@ export function SettingsPage({ onBack }: { readonly onBack: () => void }): React
           })}
         </div>
       </section>
+
+      <BackupSection />
 
       <BuildInfo />
     </main>

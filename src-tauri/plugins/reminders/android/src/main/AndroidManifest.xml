@@ -12,6 +12,10 @@
          09:00 without sending the user into settings first. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
+    <!-- A reboot clears every armed alarm, so being told about it is the only
+         way a reminder set for tomorrow survives tonight's restart. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application>
         <!-- Fully qualified on purpose: a relative name in a library manifest
              is resolved against the merged application id, which is not this
@@ -19,5 +23,18 @@
         <receiver
             android:name="dev.local.organizer.reminders.ReminderReceiver"
             android:exported="false" />
+
+        <!-- Exported because these are protected system broadcasts: only the
+             system can send them, and from API 31 a receiver with an
+             intent-filter has to say so explicitly. -->
+        <receiver
+            android:name="dev.local.organizer.reminders.BootReceiver"
+            android:exported="true"
+            android:directBootAware="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

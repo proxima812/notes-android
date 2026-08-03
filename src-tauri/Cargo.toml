@@ -1,7 +1,7 @@
 [package]
 name = "notes-android"
-version = "0.1.0"
-description = "Local-only notes, tasks and reminders"
+version = "1.0.0"
+description = "Local-only notes, search and reminders"
 authors = ["local"]
 edition = "2021"
 rust-version = "1.82"
@@ -32,6 +32,10 @@ parking_lot = "0.12"
 # In-tree: the bridge to AlarmManager and NotificationManager. Kept a separate
 # crate because Tauri discovers a plugin's Android library project that way.
 tauri-plugin-reminders = { path = "plugins/reminders" }
+# In-tree: the bridge to the system document picker, used by backup and restore.
+tauri-plugin-documents = { path = "plugins/documents" }
+# In-tree: switching which launcher icon the app shows.
+tauri-plugin-appicon = { path = "plugins/appicon" }
 
 [dev-dependencies]
 tempfile = "3"

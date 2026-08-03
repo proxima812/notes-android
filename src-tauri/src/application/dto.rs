@@ -415,12 +415,18 @@ impl SearchRequest {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpsertReminderRequest {
+    /// The reminder being edited, or absent to add another one to the note.
+    #[serde(default)]
+    pub reminder_id: Option<String>,
     pub note_id: String,
     pub title: String,
     pub body: String,
     pub scheduled_at: i64,
     pub timezone: String,
     pub sound: String,
+    /// RFC 5545 rule, or absent for a reminder that happens once.
+    #[serde(default)]
+    pub recurrence: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -437,6 +443,8 @@ pub struct ReminderDto {
     pub effective_sound_id: String,
     pub effective_sound_label: String,
     pub is_exact: bool,
+    /// RFC 5545 rule, or absent when the reminder happens once.
+    pub recurrence: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -444,6 +452,132 @@ pub struct ReminderDto {
 pub struct ReminderSoundDto {
     pub id: String,
     pub label: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppIconDto {
+    pub id: String,
+    pub label: String,
+    pub accent: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppIconCatalogDto {
+    pub selected_id: String,
+    pub items: Vec<AppIconDto>,
+}
+
+impl From<crate::application::app_icons::AppIconCatalog> for AppIconCatalogDto {
+    fn from(catalog: crate::application::app_icons::AppIconCatalog) -> Self {
+        Self {
+            selected_id: catalog.selected_id,
+            items: catalog
+                .items
+                .into_iter()
+                .map(|icon| AppIconDto {
+                    id: icon.id.to_owned(),
+                    label: icon.label.to_owned(),
+                    accent: icon.accent.to_owned(),
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskDto {
+    pub id: String,
+    pub title: String,
+    pub completed: bool,
+    pub position: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskProgressDto {
+    pub total: i64,
+    pub completed: i64,
+}
+
+impl From<crate::domain::tasks::Task> for TaskDto {
+    fn from(task: crate::domain::tasks::Task) -> Self {
+        Self {
+            id: task.id.to_string(),
+            title: task.title,
+            completed: task.status.is_completed(),
+            position: task.position,
+        }
+    }
+}
+
+impl From<crate::domain::tasks::TaskProgress> for TaskProgressDto {
+    fn from(progress: crate::domain::tasks::TaskProgress) -> Self {
+        Self {
+            total: progress.total,
+            completed: progress.completed,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagDto {
+    pub id: String,
+    pub name: String,
+    pub usage_count: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderDto {
+    pub id: String,
+    pub name: String,
+    pub note_count: i64,
+}
+
+impl From<crate::domain::organisation::Tag> for TagDto {
+    fn from(tag: crate::domain::organisation::Tag) -> Self {
+        Self {
+            id: tag.id.to_string(),
+            name: tag.name,
+            usage_count: tag.usage_count,
+        }
+    }
+}
+
+impl From<crate::domain::organisation::Folder> for FolderDto {
+    fn from(folder: crate::domain::organisation::Folder) -> Self {
+        Self {
+            id: folder.id.to_string(),
+            name: folder.name,
+            note_count: folder.note_count,
+        }
+    }
+}
+
+/// What a backup or restore did, as the settings screen reports it.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupOutcomeDto {
+    /// False when the user backed out of the picker, which the screen shows as
+    /// nothing having happened rather than as a failure.
+    pub completed: bool,
+    pub file_name: Option<String>,
+    pub note_count: i64,
+    pub reminder_count: i64,
+    pub size_bytes: u64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BackupRecordDto {
+    pub file_name: String,
+    pub size_bytes: u64,
+    pub note_count: i64,
+    pub created_at: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -468,6 +602,33 @@ impl From<ReminderView> for ReminderDto {
             effective_sound_id: view.effective_sound.id.to_owned(),
             effective_sound_label: view.effective_sound.label.to_owned(),
             is_exact: scheduled.occurrence.is_exact,
+            recurrence: scheduled
+                .reminder
+                .recurrence
+                .map(|rule| rule.rule().to_owned()),
+        }
+    }
+}
+
+impl From<crate::application::backup::BackupOutcome> for BackupOutcomeDto {
+    fn from(outcome: crate::application::backup::BackupOutcome) -> Self {
+        Self {
+            completed: outcome.completed,
+            file_name: outcome.file_name,
+            note_count: outcome.note_count,
+            reminder_count: outcome.reminder_count,
+            size_bytes: outcome.size_bytes,
+        }
+    }
+}
+
+impl From<crate::domain::backup::BackupRecord> for BackupRecordDto {
+    fn from(record: crate::domain::backup::BackupRecord) -> Self {
+        Self {
+            file_name: record.file_name,
+            size_bytes: record.size_bytes,
+            note_count: record.note_count,
+            created_at: record.created_at.as_millis(),
         }
     }
 }
@@ -619,6 +780,7 @@ mod tests {
             effective_sound_id: "death_and_rebirth".to_owned(),
             effective_sound_label: "Death & Rebirth".to_owned(),
             is_exact: false,
+            recurrence: None,
         })
         .expect("serialises");
 
@@ -649,6 +811,8 @@ mod tests {
                     scheduled_at: Timestamp::from_millis(2_000),
                     timezone: "Asia/Almaty".into(),
                     sound: "default".into(),
+                    recurrence: None,
+                    snooze_minutes: 10,
                     is_enabled: true,
                 },
                 occurrence: ReminderOccurrence {

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- No storage permissions on purpose. The document picker hands back a
+         URI the user chose themselves, which is access granted per file rather
+         than a standing right to read their storage. -->
+
+</manifest>

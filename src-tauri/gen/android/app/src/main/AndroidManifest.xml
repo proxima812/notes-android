@@ -16,12 +16,16 @@
             android:label="@string/main_activity_title"
             android:name=".MainActivity"
             android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <!-- AndroidTV support -->
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-            </intent-filter>
+            <!-- The launcher entry lives on the `activity-alias` entries the
+                 appicon plugin contributes, one per icon, so that switching
+                 icons is switching which alias is enabled. Leaving one here as
+                 well would show the app twice in the launcher, and an alias
+                 cannot be shown while its target activity is disabled — so the
+                 target cannot keep the entry itself.
+
+                 Edited on purpose in a generated file: `tauri android init`
+                 writes this manifest, so re-running it brings the filter back
+                 and the aliases have to be re-checked. -->
         </activity>
 
         <provider

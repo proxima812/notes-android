@@ -1863,7 +1863,7 @@ checksum = "650eef8c711430f1a879fdd01d4745a7deea475becfb90269c06775983bbf086"
 
 [[package]]
 name = "notes-android"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -1874,6 +1874,8 @@ dependencies = [
  "sha2",
  "tauri",
  "tauri-build",
+ "tauri-plugin-appicon",
+ "tauri-plugin-documents",
  "tauri-plugin-reminders",
  "tempfile",
  "thiserror 2.0.19",
@@ -3240,6 +3242,26 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "walkdir",
+]
+
+[[package]]
+name = "tauri-plugin-appicon"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.19",
+]
+
+[[package]]
+name = "tauri-plugin-documents"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

@@ -26,6 +26,7 @@ internal class ScheduleArgs {
     var soundId: String = ""
     var soundLabel: String = ""
     var vibrate: Boolean = true
+    var snoozeMinutes: Int = ArmedAlarm.DEFAULT_SNOOZE_MINUTES
 }
 
 @InvokeArg
@@ -95,23 +96,21 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
         }
 
         try {
-            val channelId = ReminderNotifications.ensureChannel(
-                context = activity,
-                soundId = args.soundId,
-                soundLabel = args.soundLabel,
-                vibrate = args.vibrate,
-            )
             val armedExact = AlarmScheduler.schedule(
                 context = activity,
-                occurrenceId = args.occurrenceId,
-                noteId = args.noteId,
-                requestCode = args.requestCode,
-                triggerAtMillis = args.triggerAtMillis,
-                title = args.title,
-                body = args.body,
-                exact = args.exact,
-                channelId = channelId,
-                vibrate = args.vibrate,
+                alarm = ArmedAlarm(
+                    occurrenceId = args.occurrenceId,
+                    noteId = args.noteId,
+                    requestCode = args.requestCode,
+                    triggerAtMillis = args.triggerAtMillis,
+                    title = args.title,
+                    body = args.body,
+                    soundId = args.soundId,
+                    soundLabel = args.soundLabel,
+                    vibrate = args.vibrate,
+                    exact = args.exact,
+                    snoozeMinutes = args.snoozeMinutes,
+                ),
             )
 
             val result = JSObject()
@@ -127,6 +126,27 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
         val args = invoke.parseArgs(CancelArgs::class.java)
         AlarmScheduler.cancel(activity, args.requestCode)
         invoke.resolve(JSObject())
+    }
+
+    /**
+     * Cancels every alarm this app has armed.
+     *
+     * Restoring a backup replaces the reminders the core knows about, which
+     * leaves the OS holding alarms for occurrences that no longer exist. The
+     * journal is the only record of those, so it is also the only way to take
+     * them back.
+     */
+    @Command
+    fun cancelAll(invoke: Invoke) {
+        var cancelled = 0
+        for (alarm in AlarmStore.all(activity)) {
+            AlarmScheduler.cancel(activity, alarm.requestCode)
+            cancelled++
+        }
+
+        val result = JSObject()
+        result.put("cancelled", cancelled)
+        invoke.resolve(result)
     }
 
     @Command

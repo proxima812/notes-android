@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!-- One alias per icon, all pointing at the same activity. The launcher
+             entry lives on the aliases rather than on MainActivity, because an
+             alias cannot be shown while its target activity is disabled — which
+             is the only other way to avoid two icons at once.
+
+             Exactly one is enabled at a time. `Original` starts enabled so a
+             fresh install wears the mark the app shipped with. -->
+
+        <!-- The mark the app shipped with. Its artwork is the app's own
+             launcher icon, so this variant costs no extra resources and stays
+             in step with whatever `tauri icon` generates. -->
+        <activity-alias
+            android:name="dev.local.organizer.appicon.Original"
+            android:targetActivity="dev.local.organizer.MainActivity"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Ink -->
+        <activity-alias
+            android:name="dev.local.organizer.appicon.Ink"
+            android:targetActivity="dev.local.organizer.MainActivity"
+            android:icon="@mipmap/ic_launcher_ink"
+            android:roundIcon="@mipmap/ic_launcher_ink"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Amber -->
+        <activity-alias
+            android:name="dev.local.organizer.appicon.Amber"
+            android:targetActivity="dev.local.organizer.MainActivity"
+            android:icon="@mipmap/ic_launcher_amber"
+            android:roundIcon="@mipmap/ic_launcher_amber"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Midnight -->
+        <activity-alias
+            android:name="dev.local.organizer.appicon.Midnight"
+            android:targetActivity="dev.local.organizer.MainActivity"
+            android:icon="@mipmap/ic_launcher_midnight"
+            android:roundIcon="@mipmap/ic_launcher_midnight"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Paper -->
+        <activity-alias
+            android:name="dev.local.organizer.appicon.Paper"
+            android:targetActivity="dev.local.organizer.MainActivity"
+            android:icon="@mipmap/ic_launcher_paper"
+            android:roundIcon="@mipmap/ic_launcher_paper"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Neon -->
+        <activity-alias
+            android:name="dev.local.organizer.appicon.Neon"
+            android:targetActivity="dev.local.organizer.MainActivity"
+            android:icon="@mipmap/ic_launcher_neon"
+            android:roundIcon="@mipmap/ic_launcher_neon"
+            android:label="@string/app_name"
+            android:exported="true"
+            android:enabled="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+    </application>
+
+</manifest>

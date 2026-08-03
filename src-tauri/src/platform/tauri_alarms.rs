@@ -32,6 +32,7 @@ impl<R: Runtime> AlarmClock for TauriAlarmClock<R> {
             sound_id: alarm.sound_id.clone(),
             sound_label: alarm.sound_label.clone(),
             vibrate: alarm.vibrate,
+            snooze_minutes: alarm.snooze_minutes,
         };
 
         self.app
@@ -40,6 +41,21 @@ impl<R: Runtime> AlarmClock for TauriAlarmClock<R> {
             .map(|response| response.scheduled_exact)
             .map_err(|error| {
                 NotificationError::ScheduleFailed {
+                    reason: error.to_string(),
+                }
+                .into()
+            })
+    }
+
+    fn cancel_all(&self) -> AppResult<()> {
+        self.app
+            .reminders()
+            .cancel_all()
+            .map(|response| {
+                tracing::info!(cancelled = response.cancelled, "alarms taken back");
+            })
+            .map_err(|error| {
+                PlatformError::PluginCall {
                     reason: error.to_string(),
                 }
                 .into()

@@ -15,6 +15,7 @@ import {
 } from "@/features/notes/api";
 import { buildDoc, buildText, type NoteTemplate } from "@/features/notes/templates";
 import { NoteCard } from "@/features/notes/ui/NoteCard";
+import { listFolders, listTags } from "@/features/organisation/api";
 import { TemplatePicker } from "@/features/notes/ui/TemplatePicker";
 import { ThemeSwitcher } from "@/features/settings/ui/ThemeSwitcher";
 import { describeError } from "@/shared/api/errors";
@@ -66,9 +67,22 @@ export function LibraryPage({
   const [query, setQuery] = useState("");
   const [templatesOpen, setTemplatesOpen] = useState(false);
 
+  // One filter at a time: a note lives in folders and wears tags, and letting
+  // both narrow at once would mostly produce empty screens people cannot
+  // explain to themselves.
+  const [filter, setFilter] = useState<{ kind: "folder" | "tag"; id: string } | null>(null);
+  const folders = useQuery({ queryKey: ["folders"], queryFn: listFolders });
+  const tags = useQuery({ queryKey: ["tags"], queryFn: listTags });
+
   const notes = useQuery({
-    queryKey: ["notes", scope],
-    queryFn: () => listNotes({ scope, limit: 100 }),
+    queryKey: ["notes", scope, filter?.kind ?? "", filter?.id ?? ""],
+    queryFn: () =>
+      listNotes({
+        scope,
+        limit: 100,
+        folderId: filter?.kind === "folder" ? filter.id : undefined,
+        tagId: filter?.kind === "tag" ? filter.id : undefined,
+      }),
   });
 
   // The badge has to be right even while the active tab is showing, so the
@@ -173,6 +187,63 @@ export function LibraryPage({
         </section>
       ) : (
         <>
+          {/* Filters only appear once there is something to filter by: an empty
+              row of chips on a fresh install is furniture, not a feature. */}
+          {((folders.data ?? []).length > 0 || (tags.data ?? []).length > 0) && (
+            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+              <button
+                type="button"
+                aria-pressed={filter === null}
+                onClick={() => {
+                  setFilter(null);
+                }}
+                className={`min-h-11 shrink-0 rounded-xl border px-3 text-sm ${
+                  filter === null
+                    ? "border-accent text-content"
+                    : "border-border-subtle text-content-muted"
+                }`}
+              >
+                {t("filing.all")}
+              </button>
+              {(folders.data ?? []).map((folder) => {
+                const chosen = filter?.kind === "folder" && filter.id === folder.id;
+                return (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    aria-pressed={chosen}
+                    onClick={() => {
+                      setFilter(chosen ? null : { kind: "folder", id: folder.id });
+                    }}
+                    className={`min-h-11 shrink-0 rounded-xl border px-3 text-sm ${
+                      chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
+                    }`}
+                  >
+                    {folder.name}
+                  </button>
+                );
+              })}
+              {(tags.data ?? []).map((tag) => {
+                const chosen = filter?.kind === "tag" && filter.id === tag.id;
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    aria-pressed={chosen}
+                    onClick={() => {
+                      setFilter(chosen ? null : { kind: "tag", id: tag.id });
+                    }}
+                    className={`min-h-11 shrink-0 rounded-xl border px-3 text-sm ${
+                      chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
+                    }`}
+                  >
+                    #{tag.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           <div role="tablist" className="bg-surface-sunken flex gap-1 rounded-2xl p-1">
             {TABS.map((tab) => {
               const selected = scope === tab.scope;

@@ -4,16 +4,22 @@
 //! shared behind `Arc` and internally synchronised; there is no global mutable
 //! state and no `static mut` anywhere in the core.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::application::app_icons::AppIconUseCases;
+use crate::application::backup::BackupUseCases;
+use crate::application::organisation::OrganisationUseCases;
+use crate::application::tasks::TaskUseCases;
 use crate::application::use_cases::{NoteUseCases, ReminderUseCases, SearchUseCases};
 use crate::domain::clock::{SharedClock, SystemClock};
 use crate::error::AppResult;
 use crate::infrastructure::sqlite::{
-    Database, SqliteNoteRepository, SqliteReminderRepository, SqliteSearchRepository,
+    Database, SqliteBackupArchive, SqliteBackupRepository, SqliteNoteRepository,
+    SqliteOrganisationRepository, SqliteReminderRepository, SqliteSearchRepository,
+    SqliteSettingsRepository, SqliteTaskRepository,
 };
-use crate::platform::AlarmClock;
+use crate::platform::{AlarmClock, AppIconSwitch, DocumentStore};
 
 /// File name of the database inside the app's private directory.
 pub const DATABASE_FILE: &str = "organizer.sqlite";
@@ -22,6 +28,10 @@ pub struct AppState {
     pub notes: Arc<NoteUseCases>,
     pub reminders: Arc<ReminderUseCases>,
     pub search: Arc<SearchUseCases>,
+    pub backup: Arc<BackupUseCases>,
+    pub app_icons: Arc<AppIconUseCases>,
+    pub organisation: Arc<OrganisationUseCases>,
+    pub tasks: Arc<TaskUseCases>,
     pub database: Arc<Database>,
     pub clock: SharedClock,
 }
@@ -31,9 +41,15 @@ impl AppState {
     ///
     /// # Errors
     /// Fails when the database cannot be opened or migrated.
-    pub fn bootstrap(data_dir: &Path, alarms: Arc<dyn AlarmClock>) -> AppResult<Self> {
+    pub fn bootstrap(
+        data_dir: &Path,
+        staging_dir: PathBuf,
+        alarms: Arc<dyn AlarmClock>,
+        documents: Arc<dyn DocumentStore>,
+        icons: Arc<dyn AppIconSwitch>,
+    ) -> AppResult<Self> {
         let clock: SharedClock = Arc::new(SystemClock);
-        Self::with_services(data_dir, clock, alarms)
+        Self::with_services(data_dir, staging_dir, clock, alarms, documents, icons)
     }
 
     /// Same as [`Self::bootstrap`] but with injected platform services, for tests.
@@ -42,8 +58,11 @@ impl AppState {
     /// Fails when the database cannot be opened or migrated.
     pub fn with_services(
         data_dir: &Path,
+        staging_dir: PathBuf,
         clock: SharedClock,
         alarms: Arc<dyn AlarmClock>,
+        documents: Arc<dyn DocumentStore>,
+        icons: Arc<dyn AppIconSwitch>,
     ) -> AppResult<Self> {
         let path = data_dir.join(DATABASE_FILE);
         tracing::info!("opening the local database");
@@ -63,7 +82,39 @@ impl AppState {
             Arc::clone(&clock),
         ));
 
+        let backup = Arc::new(BackupUseCases::new(
+            Arc::new(SqliteBackupArchive::new(
+                Arc::clone(&database),
+                Arc::clone(&clock),
+            )),
+            Arc::new(SqliteBackupRepository::new(Arc::clone(&database))),
+            Arc::clone(&reminder_repository)
+                as Arc<dyn crate::domain::reminders::ReminderRepository>,
+            Arc::clone(&alarms),
+            documents,
+            Arc::clone(&clock),
+            staging_dir,
+        ));
+
+        let settings = Arc::new(SqliteSettingsRepository::new(
+            Arc::clone(&database),
+            Arc::clone(&clock),
+        ));
+
         Ok(Self {
+            tasks: Arc::new(TaskUseCases::new(
+                Arc::new(SqliteTaskRepository::new(Arc::clone(&database))),
+                Arc::clone(&clock),
+            )),
+            organisation: Arc::new(OrganisationUseCases::new(
+                Arc::new(SqliteOrganisationRepository::new(
+                    Arc::clone(&database),
+                    Arc::clone(&clock),
+                )),
+                Arc::clone(&clock),
+            )),
+            app_icons: Arc::new(AppIconUseCases::new(icons, settings)),
+            backup,
             notes: Arc::new(NoteUseCases::new(note_repository)),
             reminders: Arc::new(ReminderUseCases::new(
                 reminder_repository,
@@ -83,7 +134,39 @@ mod tests {
     use crate::application::dto::ListNotesRequest;
     use crate::domain::clock::{FixedClock, Timestamp};
     use crate::domain::notes::NoteDraft;
-    use crate::platform::{Alarm, AlarmClock, AlarmPermissions};
+    use crate::platform::{Alarm, AlarmClock, AlarmPermissions, DocumentStore, PickedDocument};
+
+    struct FakeDocumentStore;
+
+    impl DocumentStore for FakeDocumentStore {
+        fn export(&self, _source: &str, _name: &str, _mime: &str) -> AppResult<PickedDocument> {
+            Ok(PickedDocument::default())
+        }
+
+        fn import(&self, _destination: &str, _mime: &str) -> AppResult<PickedDocument> {
+            Ok(PickedDocument::default())
+        }
+    }
+
+    fn fake_documents() -> Arc<dyn DocumentStore> {
+        Arc::new(FakeDocumentStore)
+    }
+
+    struct FakeIconSwitch;
+
+    impl AppIconSwitch for FakeIconSwitch {
+        fn select(&self, _alias: &str, _known: &[String], _fallback: &str) -> AppResult<()> {
+            Ok(())
+        }
+
+        fn current(&self, _known: &[String], _fallback: &str) -> AppResult<Option<String>> {
+            Ok(None)
+        }
+    }
+
+    fn fake_icons() -> Arc<dyn AppIconSwitch> {
+        Arc::new(FakeIconSwitch)
+    }
 
     struct FakeAlarmClock;
 
@@ -93,6 +176,10 @@ mod tests {
         }
 
         fn cancel(&self, _request_code: i32) -> AppResult<()> {
+            Ok(())
+        }
+
+        fn cancel_all(&self) -> AppResult<()> {
             Ok(())
         }
 
@@ -121,8 +208,15 @@ mod tests {
         let directory = tempfile::tempdir().expect("temp dir");
         let clock: SharedClock = Arc::new(FixedClock::new(Timestamp::from_millis(1_000)));
 
-        let state = AppState::with_services(directory.path(), clock, fake_alarms())
-            .expect("bootstraps reminders");
+        let state = AppState::with_services(
+            directory.path(),
+            directory.path().join("staging"),
+            clock,
+            fake_alarms(),
+            fake_documents(),
+            fake_icons(),
+        )
+        .expect("bootstraps reminders");
 
         let catalog = state.reminders.sound_catalog().expect("reads catalog");
         assert_eq!(catalog.default_sound_id, "death_and_rebirth");
@@ -134,8 +228,15 @@ mod tests {
         let clock: SharedClock =
             Arc::new(FixedClock::new(Timestamp::from_millis(1_700_000_000_000)));
 
-        let state =
-            AppState::with_services(directory.path(), clock, fake_alarms()).expect("bootstraps");
+        let state = AppState::with_services(
+            directory.path(),
+            directory.path().join("staging"),
+            clock,
+            fake_alarms(),
+            fake_documents(),
+            fake_icons(),
+        )
+        .expect("bootstraps");
         assert!(directory.path().join(DATABASE_FILE).exists());
 
         state
@@ -161,9 +262,15 @@ mod tests {
             Arc::new(FixedClock::new(Timestamp::from_millis(1_700_000_000_000)));
 
         {
-            let state =
-                AppState::with_services(directory.path(), Arc::clone(&clock), fake_alarms())
-                    .expect("bootstraps");
+            let state = AppState::with_services(
+                directory.path(),
+                directory.path().join("staging"),
+                Arc::clone(&clock),
+                fake_alarms(),
+                fake_documents(),
+                fake_icons(),
+            )
+            .expect("bootstraps");
             state
                 .notes
                 .create(NoteDraft {
@@ -173,8 +280,15 @@ mod tests {
                 .expect("creates");
         }
 
-        let restarted = AppState::with_services(directory.path(), clock, fake_alarms())
-            .expect("bootstraps again");
+        let restarted = AppState::with_services(
+            directory.path(),
+            directory.path().join("staging"),
+            clock,
+            fake_alarms(),
+            fake_documents(),
+            fake_icons(),
+        )
+        .expect("bootstraps again");
         let page = restarted
             .notes
             .list(&ListNotesRequest::default())
