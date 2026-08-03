@@ -6,7 +6,7 @@ use rusqlite::{params, Row};
 
 use crate::domain::clock::{SharedClock, Timestamp};
 use crate::domain::ids::{FolderId, NoteId, TagId};
-use crate::domain::organisation::{validate_label, Folder, OrganisationRepository, Tag};
+use crate::domain::organisation::{Folder, LabelName, OrganisationRepository, Tag};
 use crate::error::{AppError, AppResult};
 
 use super::Database;
@@ -70,14 +70,12 @@ impl OrganisationRepository for SqliteOrganisationRepository {
         })
     }
 
-    fn ensure_tag(&self, name: &str, now: Timestamp) -> AppResult<Tag> {
-        let name = validate_label(name, "name")?;
-        let folded = name.to_lowercase();
+    fn ensure_tag(&self, name: &LabelName, now: Timestamp) -> AppResult<Tag> {
         self.database.in_transaction(|transaction| {
-            // Case folding happens here rather than in SQL. SQLite's `NOCASE`
-            // collation — and its `lower()` — only fold ASCII, so the index
-            // alone would let `Работа` and `работа` become two tags that look
-            // identical in every list the user ever sees.
+            // Every stored name is folded in Rust rather than compared in SQL:
+            // SQLite's `NOCASE` collation — and its `lower()` — only fold
+            // ASCII, so an index alone would let `Работа` and `работа` become
+            // two tags that look identical in every list the user ever sees.
             let mut statement = transaction
                 .prepare("SELECT id, name FROM tags")
                 .map_err(AppError::from)?;
@@ -89,7 +87,7 @@ impl OrganisationRepository for SqliteOrganisationRepository {
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .map_err(AppError::from)?
                 .into_iter()
-                .find(|(_, stored)| stored.to_lowercase() == folded)
+                .find(|(_, stored)| stored.to_lowercase() == name.folded())
                 .map(|(id, _)| id);
             drop(statement);
 
@@ -101,7 +99,7 @@ impl OrganisationRepository for SqliteOrganisationRepository {
                         .execute(
                             "INSERT INTO tags (id, name, created_at, updated_at)
                                   VALUES (?1, ?2, ?3, ?3)",
-                            params![id, name, now.as_millis()],
+                            params![id, name.display(), now.as_millis()],
                         )
                         .map_err(AppError::from)?;
                     id
@@ -149,6 +147,9 @@ impl OrganisationRepository for SqliteOrganisationRepository {
                 .execute("DELETE FROM note_tags WHERE note_id = ?1", [note_id])
                 .map_err(AppError::from)?;
             for tag in tags {
+                // `OR IGNORE` keeps the trait's promise that a repeated id is
+                // one link: the scenarios already hand over a set, and a list
+                // that says the same thing twice is not worth losing a save to.
                 transaction
                     .execute(
                         "INSERT OR IGNORE INTO note_tags (note_id, tag_id, created_at)
@@ -179,15 +180,14 @@ impl OrganisationRepository for SqliteOrganisationRepository {
         })
     }
 
-    fn create_folder(&self, name: &str, now: Timestamp) -> AppResult<Folder> {
-        let name = validate_label(name, "name")?;
+    fn create_folder(&self, name: &LabelName, now: Timestamp) -> AppResult<Folder> {
         self.database.in_transaction(|transaction| {
             let id = FolderId::new();
             transaction
                 .execute(
                     "INSERT INTO folders (id, name, created_at, updated_at)
                           VALUES (?1, ?2, ?3, ?3)",
-                    params![id, name, now.as_millis()],
+                    params![id, name.display(), now.as_millis()],
                 )
                 .map_err(AppError::from)?;
             transaction
@@ -245,6 +245,7 @@ impl OrganisationRepository for SqliteOrganisationRepository {
                 .execute("DELETE FROM note_folders WHERE note_id = ?1", [note_id])
                 .map_err(AppError::from)?;
             for folder in folders {
+                // `OR IGNORE` for the same reason as in `set_note_tags`.
                 transaction
                     .execute(
                         "INSERT OR IGNORE INTO note_folders (note_id, folder_id, created_at)
@@ -265,6 +266,10 @@ mod tests {
     use crate::infrastructure::sqlite::SqliteNoteRepository;
 
     use super::*;
+
+    fn label(name: &str) -> LabelName {
+        LabelName::new(name, "name").expect("valid")
+    }
 
     fn fixture() -> (SqliteOrganisationRepository, NoteId, SharedClock) {
         let clock: SharedClock = Arc::new(FixedClock::new(Timestamp::from_millis(1_000)));
@@ -287,9 +292,11 @@ mod tests {
         let (repository, _note, clock) = fixture();
 
         let first = repository
-            .ensure_tag("Работа", clock.now())
+            .ensure_tag(&label("Работа"), clock.now())
             .expect("creates");
-        let second = repository.ensure_tag("работа", clock.now()).expect("finds");
+        let second = repository
+            .ensure_tag(&label("работа"), clock.now())
+            .expect("finds");
 
         assert_eq!(first.id, second.id, "one tag, not two that look alike");
         assert_eq!(repository.tags().expect("reads").len(), 1);
@@ -299,9 +306,11 @@ mod tests {
     fn setting_the_tags_of_a_note_replaces_rather_than_adds() {
         let (repository, note, clock) = fixture();
         let work = repository
-            .ensure_tag("работа", clock.now())
+            .ensure_tag(&label("работа"), clock.now())
             .expect("creates");
-        let home = repository.ensure_tag("дом", clock.now()).expect("creates");
+        let home = repository
+            .ensure_tag(&label("дом"), clock.now())
+            .expect("creates");
 
         repository
             .set_note_tags(note, &[work.id, home.id], clock.now())
@@ -319,7 +328,7 @@ mod tests {
     fn a_tag_counts_only_the_notes_that_still_exist() {
         let (repository, note, clock) = fixture();
         let tag = repository
-            .ensure_tag("работа", clock.now())
+            .ensure_tag(&label("работа"), clock.now())
             .expect("creates");
         repository
             .set_note_tags(note, &[tag.id], clock.now())
@@ -332,7 +341,7 @@ mod tests {
     fn deleting_a_tag_leaves_the_notes_alone() {
         let (repository, note, clock) = fixture();
         let tag = repository
-            .ensure_tag("работа", clock.now())
+            .ensure_tag(&label("работа"), clock.now())
             .expect("creates");
         repository
             .set_note_tags(note, &[tag.id], clock.now())
@@ -351,7 +360,7 @@ mod tests {
     fn a_deleted_folder_leaves_the_list_without_taking_its_notes() {
         let (repository, note, clock) = fixture();
         let folder = repository
-            .create_folder("Проекты", clock.now())
+            .create_folder(&label("Проекты"), clock.now())
             .expect("creates");
         repository
             .set_note_folders(note, &[folder.id], clock.now())
@@ -364,11 +373,48 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_without_a_name_is_refused() {
+    fn the_same_tag_named_twice_in_a_set_is_one_link() {
+        let (repository, note, clock) = fixture();
+        let work = repository
+            .ensure_tag(&label("работа"), clock.now())
+            .expect("creates");
+
+        repository
+            .set_note_tags(note, &[work.id, work.id], clock.now())
+            .expect("a repeat is not an error");
+
+        let on_note = repository.tags_of_note(note).expect("reads");
+        assert_eq!(on_note.len(), 1);
+        assert_eq!(on_note[0].id, work.id);
+    }
+
+    #[test]
+    fn the_same_folder_named_twice_in_a_set_is_one_link() {
+        let (repository, note, clock) = fixture();
+        let projects = repository
+            .create_folder(&label("Проекты"), clock.now())
+            .expect("creates");
+
+        repository
+            .set_note_folders(note, &[projects.id, projects.id], clock.now())
+            .expect("a repeat is not an error");
+
+        let on_note = repository.folders_of_note(note).expect("reads");
+        assert_eq!(on_note.len(), 1);
+        assert_eq!(on_note[0].id, projects.id);
+    }
+
+    #[test]
+    fn a_tag_keeps_the_case_it_was_first_typed_in() {
         let (repository, _note, clock) = fixture();
-        let error = repository
-            .create_folder("   ", clock.now())
-            .expect_err("must refuse");
-        assert_eq!(error.code(), "validation_required");
+
+        repository
+            .ensure_tag(&label("Работа"), clock.now())
+            .expect("creates");
+        repository
+            .ensure_tag(&label("работа"), clock.now())
+            .expect("finds");
+
+        assert_eq!(repository.tags().expect("reads")[0].name, "Работа");
     }
 }

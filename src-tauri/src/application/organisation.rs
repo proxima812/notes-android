@@ -1,11 +1,25 @@
 //! Filing notes: folders and tags.
 
+use std::collections::HashSet;
+use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::domain::clock::SharedClock;
 use crate::domain::ids::{FolderId, NoteId, TagId};
-use crate::domain::organisation::{Folder, OrganisationRepository, Tag};
+use crate::domain::organisation::{Folder, LabelName, OrganisationRepository, Tag};
 use crate::error::AppResult;
+
+/// Keeps the first of each id and drops the repeats.
+///
+/// The frontend sends the list the user is looking at, and a list can name the
+/// same label twice; making that a set here means every repository is handed
+/// one, instead of each having to survive the repeat on its own.
+fn as_set<T: Copy + Eq + Hash>(ids: Vec<T>) -> Vec<T> {
+    let mut seen = HashSet::with_capacity(ids.len());
+    let mut set = ids;
+    set.retain(|id| seen.insert(*id));
+    set
+}
 
 pub struct OrganisationUseCases {
     organisation: Arc<dyn OrganisationRepository>,
@@ -27,10 +41,17 @@ impl OrganisationUseCases {
         self.organisation.tags()
     }
 
+    /// Finds a tag by name or creates it.
+    ///
+    /// The name is checked and folded here rather than in the repository, so
+    /// that what the user is promised — a trimmed label, a length a chip can
+    /// show, `#Работа` and `#работа` as one tag — holds whoever stores it.
+    ///
     /// # Errors
     /// Fails on validation or a database error.
     pub fn ensure_tag(&self, name: &str) -> AppResult<Tag> {
-        self.organisation.ensure_tag(name, self.clock.now())
+        let name = LabelName::new(name, "name")?;
+        self.organisation.ensure_tag(&name, self.clock.now())
     }
 
     /// # Errors
@@ -49,16 +70,18 @@ impl OrganisationUseCases {
     ///
     /// The set is sent rather than a change to it: adding and removing are the
     /// same edit from the core's side, and a list that arrives whole cannot go
-    /// out of step with the one the user is looking at.
+    /// out of step with the one the user is looking at. A tag named twice in
+    /// that list is one tag.
     ///
     /// # Errors
     /// Fails for a malformed identifier or on a database error.
     pub fn set_note_tags(&self, note_id: &str, tags: &[String]) -> AppResult<Vec<Tag>> {
         let note_id = NoteId::parse(note_id)?;
-        let ids = tags
-            .iter()
-            .map(|id| TagId::parse(id))
-            .collect::<AppResult<Vec<_>>>()?;
+        let ids = as_set(
+            tags.iter()
+                .map(|id| TagId::parse(id))
+                .collect::<AppResult<Vec<_>>>()?,
+        );
         self.organisation
             .set_note_tags(note_id, &ids, self.clock.now())?;
         self.organisation.tags_of_note(note_id)
@@ -73,7 +96,8 @@ impl OrganisationUseCases {
     /// # Errors
     /// Fails on validation or a database error.
     pub fn create_folder(&self, name: &str) -> AppResult<Folder> {
-        self.organisation.create_folder(name, self.clock.now())
+        let name = LabelName::new(name, "name")?;
+        self.organisation.create_folder(&name, self.clock.now())
     }
 
     /// # Errors
@@ -88,14 +112,19 @@ impl OrganisationUseCases {
         self.organisation.folders_of_note(NoteId::parse(note_id)?)
     }
 
+    /// Replaces the whole set of folders a note is filed under, on the same
+    /// terms as [`Self::set_note_tags`].
+    ///
     /// # Errors
     /// Fails for a malformed identifier or on a database error.
     pub fn set_note_folders(&self, note_id: &str, folders: &[String]) -> AppResult<Vec<Folder>> {
         let note_id = NoteId::parse(note_id)?;
-        let ids = folders
-            .iter()
-            .map(|id| FolderId::parse(id))
-            .collect::<AppResult<Vec<_>>>()?;
+        let ids = as_set(
+            folders
+                .iter()
+                .map(|id| FolderId::parse(id))
+                .collect::<AppResult<Vec<_>>>()?,
+        );
         self.organisation
             .set_note_folders(note_id, &ids, self.clock.now())?;
         self.organisation.folders_of_note(note_id)
@@ -107,13 +136,14 @@ mod tests {
     use parking_lot::Mutex;
 
     use crate::domain::clock::{FixedClock, Timestamp};
-    use crate::domain::organisation::validate_label;
+    use crate::domain::organisation::MAX_LABEL;
 
     use super::*;
 
-    /// Stands in for the database, and keeps the same promises: names are
-    /// folded case-insensitively, a label that goes away takes its links with
-    /// it, and the notes themselves are never written to from here.
+    /// Stands in for the database, and keeps the same promises the trait makes:
+    /// tags are matched by their folded name, a set that repeats an id makes
+    /// one link, a label that goes away takes its links with it, and the notes
+    /// themselves are never written to from here.
     #[derive(Default)]
     struct FakeOrganisation {
         tags: Mutex<Vec<Tag>>,
@@ -141,17 +171,18 @@ mod tests {
             Ok(self.tags.lock().clone())
         }
 
-        fn ensure_tag(&self, name: &str, _now: Timestamp) -> AppResult<Tag> {
+        fn ensure_tag(&self, name: &LabelName, _now: Timestamp) -> AppResult<Tag> {
             self.calls.lock().push("ensure_tag");
-            let name = validate_label(name, "name")?;
-            let folded = name.to_lowercase();
             let mut tags = self.tags.lock();
-            if let Some(existing) = tags.iter().find(|tag| tag.name.to_lowercase() == folded) {
+            if let Some(existing) = tags
+                .iter()
+                .find(|tag| tag.name.to_lowercase() == name.folded())
+            {
                 return Ok(existing.clone());
             }
             let tag = Tag {
                 id: TagId::new(),
-                name,
+                name: name.display().to_owned(),
                 usage_count: 0,
             };
             tags.push(tag.clone());
@@ -194,11 +225,11 @@ mod tests {
             Ok(self.folders.lock().clone())
         }
 
-        fn create_folder(&self, name: &str, _now: Timestamp) -> AppResult<Folder> {
+        fn create_folder(&self, name: &LabelName, _now: Timestamp) -> AppResult<Folder> {
             self.calls.lock().push("create_folder");
             let folder = Folder {
                 id: FolderId::new(),
-                name: validate_label(name, "name")?,
+                name: name.display().to_owned(),
                 note_count: 0,
             };
             self.folders.lock().push(folder.clone());
@@ -465,21 +496,103 @@ mod tests {
 
     #[test]
     fn a_folder_without_a_name_is_refused() {
-        let (organisation, _repository) = fixture();
+        let (organisation, repository) = fixture();
 
         let error = organisation.create_folder("   ").expect_err("must refuse");
 
         assert_eq!(error.code(), "validation_required");
         assert!(organisation.folders().expect("reads").is_empty());
+        assert!(
+            !repository.calls.lock().contains(&"create_folder"),
+            "the name is refused here, not by whoever stores it"
+        );
     }
 
     #[test]
     fn a_tag_without_a_name_is_refused() {
-        let (organisation, _repository) = fixture();
+        let (organisation, repository) = fixture();
 
         let error = organisation.ensure_tag("").expect_err("must refuse");
 
         assert_eq!(error.code(), "validation_required");
         assert!(organisation.tags().expect("reads").is_empty());
+        assert!(!repository.calls.lock().contains(&"ensure_tag"));
+    }
+
+    #[test]
+    fn a_label_too_long_to_show_never_reaches_the_repository() {
+        let (organisation, repository) = fixture();
+        let long = "я".repeat(MAX_LABEL + 1);
+
+        for error in [
+            organisation.ensure_tag(&long).expect_err("must refuse"),
+            organisation.create_folder(&long).expect_err("must refuse"),
+        ] {
+            assert_eq!(error.code(), "validation_too_long");
+        }
+        assert!(repository.calls.lock().is_empty());
+    }
+
+    #[test]
+    fn a_tag_named_twice_in_a_set_is_filed_once() {
+        let (organisation, repository) = fixture();
+        let note = repository.add_note("Заметка");
+        let work = organisation.ensure_tag("работа").expect("creates");
+
+        let on_note = organisation
+            .set_note_tags(
+                &note.to_string(),
+                &[work.id.to_string(), work.id.to_string()],
+            )
+            .expect("a repeat is not an error");
+
+        assert_eq!(on_note, vec![work]);
+        assert_eq!(
+            repository.note_tags.lock().len(),
+            1,
+            "the repository is handed a set, so it never has to fold one itself"
+        );
+    }
+
+    #[test]
+    fn a_folder_named_twice_in_a_set_is_filed_once() {
+        let (organisation, repository) = fixture();
+        let note = repository.add_note("Заметка");
+        let projects = organisation.create_folder("Проекты").expect("creates");
+
+        let on_note = organisation
+            .set_note_folders(
+                &note.to_string(),
+                &[projects.id.to_string(), projects.id.to_string()],
+            )
+            .expect("a repeat is not an error");
+
+        assert_eq!(on_note, vec![projects]);
+        assert_eq!(repository.note_folders.lock().len(), 1);
+    }
+
+    #[test]
+    fn a_set_keeps_the_order_it_arrived_in_when_repeats_are_dropped() {
+        let (organisation, repository) = fixture();
+        let note = repository.add_note("Заметка");
+        let work = organisation.ensure_tag("работа").expect("creates");
+        let home = organisation.ensure_tag("дом").expect("creates");
+
+        organisation
+            .set_note_tags(
+                &note.to_string(),
+                &[
+                    work.id.to_string(),
+                    home.id.to_string(),
+                    work.id.to_string(),
+                ],
+            )
+            .expect("sets");
+
+        assert_eq!(
+            *repository.note_tags.lock(),
+            vec![(note, work.id), (note, home.id)],
+            "the first mention is the one that stays"
+        );
     }
 }
