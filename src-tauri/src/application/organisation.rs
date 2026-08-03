@@ -34,7 +34,8 @@ impl OrganisationUseCases {
     }
 
     /// # Errors
-    /// Fails for a malformed identifier or on a database error.
+    /// Fails for a malformed identifier, for a tag that does not exist, or on a
+    /// database error.
     pub fn delete_tag(&self, id: &str) -> AppResult<()> {
         self.organisation.delete_tag(TagId::parse(id)?)
     }
@@ -52,7 +53,8 @@ impl OrganisationUseCases {
     /// out of step with the one the user is looking at.
     ///
     /// # Errors
-    /// Fails for a malformed identifier or on a database error.
+    /// Fails for a malformed identifier, for a tag that does not exist, or on a
+    /// database error.
     pub fn set_note_tags(&self, note_id: &str, tags: &[String]) -> AppResult<Vec<Tag>> {
         let note_id = NoteId::parse(note_id)?;
         let ids = tags
@@ -77,7 +79,8 @@ impl OrganisationUseCases {
     }
 
     /// # Errors
-    /// Fails for a malformed identifier or on a database error.
+    /// Fails for a malformed identifier, for a folder that does not exist, or
+    /// on a database error.
     pub fn delete_folder(&self, id: &str) -> AppResult<()> {
         self.organisation.delete_folder(FolderId::parse(id)?)
     }
@@ -89,7 +92,8 @@ impl OrganisationUseCases {
     }
 
     /// # Errors
-    /// Fails for a malformed identifier or on a database error.
+    /// Fails for a malformed identifier, for a folder that does not exist, or
+    /// on a database error.
     pub fn set_note_folders(&self, note_id: &str, folders: &[String]) -> AppResult<Vec<Folder>> {
         let note_id = NoteId::parse(note_id)?;
         let ids = folders
@@ -108,8 +112,16 @@ mod tests {
 
     use crate::domain::clock::{FixedClock, Timestamp};
     use crate::domain::organisation::validate_label;
+    use crate::error::{AppError, DatabaseError};
 
     use super::*;
+
+    fn not_found(entity: &'static str, id: &impl ToString) -> AppError {
+        AppError::Database(DatabaseError::NotFound {
+            entity,
+            id: id.to_string(),
+        })
+    }
 
     /// Stands in for the database, and keeps the same promises: names are
     /// folded case-insensitively, a label that goes away takes its links with
@@ -160,7 +172,12 @@ mod tests {
 
         fn delete_tag(&self, id: TagId) -> AppResult<()> {
             self.calls.lock().push("delete_tag");
-            self.tags.lock().retain(|tag| tag.id != id);
+            let mut tags = self.tags.lock();
+            let before = tags.len();
+            tags.retain(|tag| tag.id != id);
+            if tags.len() == before {
+                return Err(not_found("tag", &id));
+            }
             self.note_tags.lock().retain(|(_, tag)| *tag != id);
             Ok(())
         }
@@ -183,6 +200,14 @@ mod tests {
 
         fn set_note_tags(&self, note_id: NoteId, tags: &[TagId], _now: Timestamp) -> AppResult<()> {
             self.calls.lock().push("set_note_tags");
+            let known = self.tags.lock();
+            if let Some(missing) = tags
+                .iter()
+                .find(|id| !known.iter().any(|tag| tag.id == **id))
+            {
+                return Err(not_found("tag", missing));
+            }
+            drop(known);
             let mut links = self.note_tags.lock();
             links.retain(|(note, _)| *note != note_id);
             links.extend(tags.iter().map(|tag| (note_id, *tag)));
@@ -207,7 +232,12 @@ mod tests {
 
         fn delete_folder(&self, id: FolderId) -> AppResult<()> {
             self.calls.lock().push("delete_folder");
-            self.folders.lock().retain(|folder| folder.id != id);
+            let mut folders = self.folders.lock();
+            let before = folders.len();
+            folders.retain(|folder| folder.id != id);
+            if folders.len() == before {
+                return Err(not_found("folder", &id));
+            }
             self.note_folders.lock().retain(|(_, folder)| *folder != id);
             Ok(())
         }
@@ -235,6 +265,14 @@ mod tests {
             _now: Timestamp,
         ) -> AppResult<()> {
             self.calls.lock().push("set_note_folders");
+            let known = self.folders.lock();
+            if let Some(missing) = folders
+                .iter()
+                .find(|id| !known.iter().any(|folder| folder.id == **id))
+            {
+                return Err(not_found("folder", missing));
+            }
+            drop(known);
             let mut links = self.note_folders.lock();
             links.retain(|(note, _)| *note != note_id);
             links.extend(folders.iter().map(|folder| (note_id, *folder)));
@@ -461,6 +499,103 @@ mod tests {
 
         assert_eq!(error.code(), "validation_invalid");
         assert!(!repository.calls.lock().contains(&"set_note_folders"));
+    }
+
+    #[test]
+    fn deleting_a_tag_that_is_not_there_is_reported_rather_than_passed_over() {
+        let (organisation, _repository) = fixture();
+        let absent = TagId::new();
+
+        let error = organisation
+            .delete_tag(&absent.to_string())
+            .expect_err("nothing to delete");
+
+        assert_eq!(error.code(), "not_found");
+        assert!(
+            error.to_string().contains(&absent.to_string()),
+            "the error names the id that was missed"
+        );
+    }
+
+    #[test]
+    fn deleting_a_folder_that_is_not_there_is_reported_rather_than_passed_over() {
+        let (organisation, _repository) = fixture();
+        let absent = FolderId::new();
+
+        let error = organisation
+            .delete_folder(&absent.to_string())
+            .expect_err("nothing to delete");
+
+        assert_eq!(error.code(), "not_found");
+        assert!(error.to_string().contains(&absent.to_string()));
+    }
+
+    #[test]
+    fn deleting_the_same_tag_twice_succeeds_only_once() {
+        let (organisation, _repository) = fixture();
+        let work = organisation.ensure_tag("работа").expect("creates");
+
+        organisation
+            .delete_tag(&work.id.to_string())
+            .expect("deletes");
+        let error = organisation
+            .delete_tag(&work.id.to_string())
+            .expect_err("already gone");
+
+        assert_eq!(error.code(), "not_found");
+    }
+
+    #[test]
+    fn a_tag_that_does_not_exist_leaves_the_whole_set_as_it_was() {
+        let (organisation, repository) = fixture();
+        let note = repository.add_note("Заметка");
+        let work = organisation.ensure_tag("работа").expect("creates");
+        organisation
+            .set_note_tags(&note.to_string(), &[work.id.to_string()])
+            .expect("sets");
+        let absent = TagId::new();
+
+        let error = organisation
+            .set_note_tags(
+                &note.to_string(),
+                &[work.id.to_string(), absent.to_string()],
+            )
+            .expect_err("must refuse");
+
+        assert_eq!(error.code(), "not_found");
+        assert!(
+            error.to_string().contains(&absent.to_string()),
+            "the error names the tag that is missing, not the set"
+        );
+        assert_eq!(
+            organisation.tags_of_note(&note.to_string()).expect("reads"),
+            vec![work],
+            "a set that is only half known must not be written at all"
+        );
+    }
+
+    #[test]
+    fn a_folder_that_does_not_exist_leaves_the_whole_set_as_it_was() {
+        let (organisation, repository) = fixture();
+        let note = repository.add_note("Заметка");
+        let projects = organisation.create_folder("Проекты").expect("creates");
+        organisation
+            .set_note_folders(&note.to_string(), &[projects.id.to_string()])
+            .expect("files");
+        let absent = FolderId::new();
+
+        let error = organisation
+            .set_note_folders(&note.to_string(), &[absent.to_string()])
+            .expect_err("must refuse");
+
+        assert_eq!(error.code(), "not_found");
+        assert!(error.to_string().contains(&absent.to_string()));
+        assert_eq!(
+            organisation
+                .folders_of_note(&note.to_string())
+                .expect("reads"),
+            vec![projects]
+        );
     }
 
     #[test]

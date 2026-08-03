@@ -64,8 +64,10 @@ pub trait OrganisationRepository: Send + Sync {
     /// Fails on validation or a database error.
     fn ensure_tag(&self, name: &str, now: Timestamp) -> AppResult<Tag>;
 
+    /// Deletes a tag, taking it off every note that wore it.
+    ///
     /// # Errors
-    /// Fails on a database error.
+    /// Fails if no such tag exists, or on a database error.
     fn delete_tag(&self, id: TagId) -> AppResult<()>;
 
     /// # Errors
@@ -74,8 +76,11 @@ pub trait OrganisationRepository: Send + Sync {
 
     /// Replaces the whole set of tags on a note.
     ///
+    /// Every tag in the set must already exist; the set is written whole or not
+    /// at all.
+    ///
     /// # Errors
-    /// Fails on a database error.
+    /// Fails if any of the tags does not exist, or on a database error.
     fn set_note_tags(&self, note_id: NoteId, tags: &[TagId], now: Timestamp) -> AppResult<()>;
 
     /// Every folder, by name.
@@ -88,8 +93,10 @@ pub trait OrganisationRepository: Send + Sync {
     /// Fails on validation or a database error.
     fn create_folder(&self, name: &str, now: Timestamp) -> AppResult<Folder>;
 
+    /// Deletes a folder, leaving the notes that were in it where they are.
+    ///
     /// # Errors
-    /// Fails on a database error.
+    /// Fails if no such folder exists, or on a database error.
     fn delete_folder(&self, id: FolderId) -> AppResult<()>;
 
     /// # Errors
@@ -98,8 +105,11 @@ pub trait OrganisationRepository: Send + Sync {
 
     /// Replaces the whole set of folders a note is filed under.
     ///
+    /// Every folder in the set must already exist; the set is written whole or
+    /// not at all.
+    ///
     /// # Errors
-    /// Fails on a database error.
+    /// Fails if any of the folders does not exist, or on a database error.
     fn set_note_folders(
         &self,
         note_id: NoteId,
