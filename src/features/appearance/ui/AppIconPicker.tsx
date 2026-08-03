@@ -52,9 +52,17 @@ export function AppIconPicker(): React.JSX.Element | null {
                 selected ? "border-accent" : "border-border-subtle"
               }`}
             >
-              <span
-                aria-hidden="true"
-                className="border-border-subtle size-8 shrink-0 rounded-xl border"
+              {/* The artwork itself, not a swatch standing in for it: the
+                  whole question the screen answers is what the icon looks
+                  like. The accent sits behind it so the tile has its colour
+                  before the image has decoded. */}
+              <img
+                src={`/app-icons/${icon.id}.png`}
+                alt=""
+                width={32}
+                height={32}
+                loading="lazy"
+                className="border-border-subtle size-8 shrink-0 rounded-xl border object-cover"
                 style={{ backgroundColor: icon.accent }}
               />
               <span className="text-content flex-1 text-sm font-medium">{icon.label}</span>

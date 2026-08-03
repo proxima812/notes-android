@@ -88,7 +88,7 @@ export const crh: Dictionary = {
   "filing.all": "Episi",
 
   "appIcon.title": "Uygulama işareti",
-  "appIcon.hint": "Launcher işaretni deral yañartmaz olabilir — uygulamalar cedvelini qapatıp kene açıñız.",
+  "appIcon.hint": "Sistema işaretni kene çizsin dep uygulama qapana.",
 
   "backup.title": "Zapas nusxa",
   "backup.description": "Nusxa siz qoygan yerde saqlana. Uygulama iç bir yerge iç bir şey yollamay.",

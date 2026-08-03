@@ -16,19 +16,20 @@ impl<R: Runtime> TauriAppIconSwitch<R> {
         Self { app }
     }
 
-    fn request(alias: &str, known: &[String]) -> SelectIconRequest {
+    fn request(alias: &str, known: &[String], fallback: &str) -> SelectIconRequest {
         SelectIconRequest {
             alias: alias.to_owned(),
             known: known.to_vec(),
+            fallback: fallback.to_owned(),
         }
     }
 }
 
 impl<R: Runtime> AppIconSwitch for TauriAppIconSwitch<R> {
-    fn select(&self, alias: &str, known: &[String]) -> AppResult<()> {
+    fn select(&self, alias: &str, known: &[String], fallback: &str) -> AppResult<()> {
         self.app
             .app_icon()
-            .select(&Self::request(alias, known))
+            .select(&Self::request(alias, known, fallback))
             .map(|_| ())
             .map_err(|error| {
                 PlatformError::PluginCall {
@@ -38,10 +39,10 @@ impl<R: Runtime> AppIconSwitch for TauriAppIconSwitch<R> {
             })
     }
 
-    fn current(&self, known: &[String]) -> AppResult<Option<String>> {
+    fn current(&self, known: &[String], fallback: &str) -> AppResult<Option<String>> {
         self.app
             .app_icon()
-            .current(&Self::request("", known))
+            .current(&Self::request("", known, fallback))
             .map(|current| {
                 if current.alias.is_empty() {
                     None

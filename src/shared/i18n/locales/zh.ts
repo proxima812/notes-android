@@ -87,7 +87,7 @@ export const zh: Dictionary = {
   "filing.all": "全部",
 
   "appIcon.title": "应用图标",
-  "appIcon.hint": "启动器可能不会立刻更新图标——关闭并重新打开应用列表通常就好了。",
+  "appIcon.hint": "应用会自行关闭，以便系统重新绘制主屏幕上的图标。",
 
   "backup.title": "备份",
   "backup.description": "备份只留在你放置的位置。应用不会向任何地方发送数据。",

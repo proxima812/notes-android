@@ -20,9 +20,18 @@ pub struct AppIcon {
 }
 
 /// The one enabled in the manifest, so a fresh install already has an icon.
-pub const DEFAULT_ICON_ID: &str = "ink";
+///
+/// The original mark, which is what the app wore before there was a choice —
+/// picking anything else has to be something the user did on purpose.
+pub const DEFAULT_ICON_ID: &str = "original";
 
 pub const APP_ICONS: &[AppIcon] = &[
+    AppIcon {
+        id: "original",
+        alias: "Original",
+        label: "xima.keeps",
+        accent: "#0B0B0D",
+    },
     AppIcon {
         id: "ink",
         alias: "Ink",
@@ -64,6 +73,15 @@ pub const fn app_icons() -> &'static [AppIcon] {
 #[must_use]
 pub fn aliases() -> Vec<String> {
     APP_ICONS.iter().map(|icon| icon.alias.to_owned()).collect()
+}
+
+/// The alias the manifest enables on a fresh install.
+#[must_use]
+pub fn default_alias() -> String {
+    APP_ICONS
+        .iter()
+        .find(|icon| icon.id == DEFAULT_ICON_ID)
+        .map_or_else(String::new, |icon| icon.alias.to_owned())
 }
 
 /// # Errors

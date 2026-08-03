@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Languages, Settings } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 
+import { listAppIcons } from "@/features/appearance/api";
 import { reconcileReminderZone, topUpReminders } from "@/features/reminders/api";
 import { useReminderLaunchTarget } from "@/features/reminders/useReminderLaunchTarget";
 import { LanguagePicker } from "@/features/settings/ui/LanguagePicker";
@@ -71,6 +72,14 @@ function Shell(): React.JSX.Element {
         // The app must still open. A reminder left in yesterday's zone is worth
         // less than a start screen that refuses to appear.
       });
+
+    // Asking which icon is showing also puts right an update that left two of
+    // them enabled — component states the app set survive an install, and the
+    // manifest enables its own default on top of them.
+    void listAppIcons().catch(() => {
+      // Off-device there is no launcher to ask, and that is not an error worth
+      // showing on the first screen.
+    });
   }, []);
 
   // A tapped reminder overrides whatever was on screen, including a note the

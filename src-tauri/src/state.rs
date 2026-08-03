@@ -155,11 +155,11 @@ mod tests {
     struct FakeIconSwitch;
 
     impl AppIconSwitch for FakeIconSwitch {
-        fn select(&self, _alias: &str, _known: &[String]) -> AppResult<()> {
+        fn select(&self, _alias: &str, _known: &[String], _fallback: &str) -> AppResult<()> {
             Ok(())
         }
 
-        fn current(&self, _known: &[String]) -> AppResult<Option<String>> {
+        fn current(&self, _known: &[String], _fallback: &str) -> AppResult<Option<String>> {
             Ok(None)
         }
     }

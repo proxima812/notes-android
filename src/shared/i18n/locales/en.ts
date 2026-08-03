@@ -87,7 +87,7 @@ export const en: Dictionary = {
   "filing.all": "All",
 
   "appIcon.title": "App icon",
-  "appIcon.hint": "The launcher may take a moment to catch up — closing and reopening the app list usually does it.",
+  "appIcon.hint": "The app closes so the system redraws the icon on your home screen.",
 
   "backup.title": "Backup",
   "backup.description": "The copy stays wherever you put it. The app sends nothing anywhere.",

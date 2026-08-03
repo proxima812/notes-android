@@ -6,6 +6,9 @@ use serde::{Deserialize, Serialize};
 pub struct SelectIconRequest {
     pub alias: String,
     pub known: Vec<String>,
+    /// The alias the manifest enables on a fresh install, so the platform can
+    /// tell a user's choice from the one it put there itself.
+    pub fallback: String,
 }
 
 /// The alias that ended up enabled. Empty when none is.

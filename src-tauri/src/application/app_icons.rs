@@ -8,7 +8,8 @@
 use std::sync::Arc;
 
 use crate::domain::app_icons::{
-    aliases, app_icons, id_for_alias, resolve, AppIcon, DEFAULT_ICON_ID, SELECTED_ICON_SETTING_KEY,
+    aliases, app_icons, default_alias, id_for_alias, resolve, AppIcon, DEFAULT_ICON_ID,
+    SELECTED_ICON_SETTING_KEY,
 };
 use crate::domain::settings::SettingsRepository;
 use crate::error::AppResult;
@@ -35,7 +36,7 @@ impl AppIconUseCases {
     /// # Errors
     /// Fails on a storage or platform error.
     pub fn catalog(&self) -> AppResult<AppIconCatalog> {
-        let selected_id = match self.icons.current(&aliases())? {
+        let selected_id = match self.icons.current(&aliases(), &default_alias())? {
             Some(alias) => id_for_alias(&alias).to_owned(),
             // Off-device, or a platform that will not say: fall back to what
             // was last chosen, and to the manifest default before that.
@@ -58,10 +59,13 @@ impl AppIconUseCases {
     /// Fails for an icon this build does not ship, or when the platform refuses.
     pub fn select(&self, id: &str) -> AppResult<AppIconCatalog> {
         let icon = resolve(id)?;
-        // The platform first: writing down a choice that did not take effect
-        // would leave settings showing an icon the home screen does not have.
-        self.icons.select(icon.alias, &aliases())?;
+        // Written down first, because switching closes the app so the home
+        // screen redraws — anything after the platform call may never run.
+        // A note that turns out to be wrong costs nothing: the catalogue is
+        // read back from Android, which is the thing that actually decides.
         self.settings.write(SELECTED_ICON_SETTING_KEY, icon.id)?;
+        self.icons
+            .select(icon.alias, &aliases(), &default_alias())?;
 
         Ok(AppIconCatalog {
             selected_id: icon.id.to_owned(),
@@ -85,7 +89,7 @@ mod tests {
     }
 
     impl AppIconSwitch for FakeSwitch {
-        fn select(&self, alias: &str, _known: &[String]) -> AppResult<()> {
+        fn select(&self, alias: &str, _known: &[String], _fallback: &str) -> AppResult<()> {
             if self.refuse {
                 return Err(AppError::Platform(PlatformError::PluginCall {
                     reason: "test".into(),
@@ -95,7 +99,7 @@ mod tests {
             Ok(())
         }
 
-        fn current(&self, _known: &[String]) -> AppResult<Option<String>> {
+        fn current(&self, _known: &[String], _fallback: &str) -> AppResult<Option<String>> {
             Ok(self.current.lock().clone())
         }
     }
@@ -173,14 +177,15 @@ mod tests {
     }
 
     #[test]
-    fn a_refused_switch_is_not_written_down() {
-        let (icons, _switch, settings) = fixture(true);
+    fn a_refused_switch_leaves_the_home_screen_as_it_was() {
+        let (icons, switch, _settings) = fixture(true);
 
         icons.select("neon").expect_err("must fail");
 
         assert_eq!(
-            settings.read(SELECTED_ICON_SETTING_KEY).expect("reads"),
-            None
+            *switch.current.lock(),
+            None,
+            "the note we keep may be optimistic; the home screen must not be"
         );
     }
 

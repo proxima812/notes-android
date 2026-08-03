@@ -87,7 +87,7 @@ export const es: Dictionary = {
   "filing.all": "Todas",
 
   "appIcon.title": "Icono de la aplicación",
-  "appIcon.hint": "El lanzador puede tardar un momento en actualizarse; cerrar y volver a abrir la lista de aplicaciones suele bastar.",
+  "appIcon.hint": "La aplicación se cierra para que el sistema vuelva a dibujar el icono.",
 
   "backup.title": "Copia de seguridad",
   "backup.description": "La copia se queda donde tú la dejes. La aplicación no envía nada a ninguna parte.",
