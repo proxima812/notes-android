@@ -7,7 +7,7 @@ use rusqlite::{params, Row};
 use crate::domain::clock::{SharedClock, Timestamp};
 use crate::domain::ids::{FolderId, NoteId, TagId};
 use crate::domain::organisation::{Folder, LabelName, OrganisationRepository, Tag};
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppResult, DatabaseError};
 
 use super::Database;
 
@@ -52,6 +52,13 @@ const SELECT_FOLDERS: &str = "SELECT f.id, f.name,
                JOIN notes n ON n.id = nf.note_id
               WHERE nf.folder_id = f.id AND n.deleted_at IS NULL)
        FROM folders f";
+
+fn not_found(entity: &'static str, id: &impl ToString) -> AppError {
+    AppError::Database(DatabaseError::NotFound {
+        entity,
+        id: id.to_string(),
+    })
+}
 
 impl OrganisationRepository for SqliteOrganisationRepository {
     fn tags(&self) -> AppResult<Vec<Tag>> {
@@ -115,10 +122,13 @@ impl OrganisationRepository for SqliteOrganisationRepository {
     fn delete_tag(&self, id: TagId) -> AppResult<()> {
         self.database.with_connection(|connection| {
             // `note_tags` cascades, so the notes keep everything but the label.
-            connection
+            let deleted = connection
                 .execute("DELETE FROM tags WHERE id = ?1", [id])
-                .map(|_| ())
-                .map_err(AppError::from)
+                .map_err(AppError::from)?;
+            if deleted == 0 {
+                return Err(not_found("tag", &id));
+            }
+            Ok(())
         })
     }
 
@@ -143,6 +153,20 @@ impl OrganisationRepository for SqliteOrganisationRepository {
 
     fn set_note_tags(&self, note_id: NoteId, tags: &[TagId], now: Timestamp) -> AppResult<()> {
         self.database.in_transaction(|transaction| {
+            // Checked here rather than in the use cases, and in the same
+            // transaction as the write: a tag deleted between the check and the
+            // insert would otherwise come back as a foreign-key failure, which
+            // says «ошибка базы» where it means «такого тега нет».
+            let mut exists = transaction
+                .prepare("SELECT 1 FROM tags WHERE id = ?1")
+                .map_err(AppError::from)?;
+            for tag in tags {
+                if !exists.exists([tag]).map_err(AppError::from)? {
+                    return Err(not_found("tag", tag));
+                }
+            }
+            drop(exists);
+
             transaction
                 .execute("DELETE FROM note_tags WHERE note_id = ?1", [note_id])
                 .map_err(AppError::from)?;
@@ -205,13 +229,17 @@ impl OrganisationRepository for SqliteOrganisationRepository {
         self.database.with_connection(|connection| {
             // Soft delete, like notes: the folder disappears from the list and
             // the notes that were in it stay exactly where they were.
-            connection
+            let deleted = connection
                 .execute(
-                    "UPDATE folders SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2",
+                    "UPDATE folders SET deleted_at = ?1, updated_at = ?1
+                      WHERE id = ?2 AND deleted_at IS NULL",
                     params![now.as_millis(), id],
                 )
-                .map(|_| ())
-                .map_err(AppError::from)
+                .map_err(AppError::from)?;
+            if deleted == 0 {
+                return Err(not_found("folder", &id));
+            }
+            Ok(())
         })
     }
 
@@ -241,6 +269,18 @@ impl OrganisationRepository for SqliteOrganisationRepository {
         now: Timestamp,
     ) -> AppResult<()> {
         self.database.in_transaction(|transaction| {
+            // A soft-deleted folder is gone as far as every list is concerned,
+            // so filing into one is a miss rather than a silent success.
+            let mut exists = transaction
+                .prepare("SELECT 1 FROM folders WHERE id = ?1 AND deleted_at IS NULL")
+                .map_err(AppError::from)?;
+            for folder in folders {
+                if !exists.exists([folder]).map_err(AppError::from)? {
+                    return Err(not_found("folder", folder));
+                }
+            }
+            drop(exists);
+
             transaction
                 .execute("DELETE FROM note_folders WHERE note_id = ?1", [note_id])
                 .map_err(AppError::from)?;
@@ -402,6 +442,99 @@ mod tests {
         let on_note = repository.folders_of_note(note).expect("reads");
         assert_eq!(on_note.len(), 1);
         assert_eq!(on_note[0].id, projects.id);
+    }
+
+    #[test]
+    fn deleting_a_tag_that_is_not_there_is_reported_rather_than_passed_over() {
+        let (repository, _note, _clock) = fixture();
+        let absent = TagId::new();
+
+        let error = repository
+            .delete_tag(absent)
+            .expect_err("nothing to delete");
+
+        assert_eq!(error.code(), "not_found");
+        assert!(error.to_string().contains(&absent.to_string()));
+    }
+
+    #[test]
+    fn deleting_a_folder_twice_succeeds_only_once() {
+        let (repository, _note, clock) = fixture();
+        let folder = repository
+            .create_folder(&label("Проекты"), clock.now())
+            .expect("creates");
+
+        repository.delete_folder(folder.id).expect("deletes");
+        let error = repository
+            .delete_folder(folder.id)
+            .expect_err("already gone");
+
+        assert_eq!(
+            error.code(),
+            "not_found",
+            "a folder the user can no longer see is not there to delete again"
+        );
+    }
+
+    #[test]
+    fn tagging_a_note_with_a_tag_that_does_not_exist_says_so() {
+        let (repository, note, clock) = fixture();
+        let work = repository
+            .ensure_tag(&label("работа"), clock.now())
+            .expect("creates");
+        repository
+            .set_note_tags(note, &[work.id], clock.now())
+            .expect("sets");
+        let absent = TagId::new();
+
+        let error = repository
+            .set_note_tags(note, &[work.id, absent], clock.now())
+            .expect_err("must refuse");
+
+        assert_eq!(
+            error.code(),
+            "not_found",
+            "the foreign key would have said «ошибка базы» instead"
+        );
+        assert!(error.to_string().contains(&absent.to_string()));
+        let on_note = repository.tags_of_note(note).expect("reads");
+        assert_eq!(
+            on_note.iter().map(|tag| tag.id).collect::<Vec<_>>(),
+            vec![work.id],
+            "the refused set is rolled back whole"
+        );
+    }
+
+    #[test]
+    fn filing_a_note_into_a_folder_that_does_not_exist_says_so() {
+        let (repository, note, clock) = fixture();
+        let absent = FolderId::new();
+
+        let error = repository
+            .set_note_folders(note, &[absent], clock.now())
+            .expect_err("must refuse");
+
+        assert_eq!(error.code(), "not_found");
+        assert!(error.to_string().contains(&absent.to_string()));
+    }
+
+    #[test]
+    fn filing_a_note_into_a_deleted_folder_says_so() {
+        let (repository, note, clock) = fixture();
+        let folder = repository
+            .create_folder(&label("Проекты"), clock.now())
+            .expect("creates");
+        repository.delete_folder(folder.id).expect("deletes");
+
+        let error = repository
+            .set_note_folders(note, &[folder.id], clock.now())
+            .expect_err("must refuse");
+
+        assert_eq!(
+            error.code(),
+            "not_found",
+            "a soft-deleted folder is gone from every list, so filing into it is a miss"
+        );
     }
 
     #[test]

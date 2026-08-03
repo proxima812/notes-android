@@ -98,8 +98,10 @@ pub trait OrganisationRepository: Send + Sync {
     /// Fails on a database error.
     fn ensure_tag(&self, name: &LabelName, now: Timestamp) -> AppResult<Tag>;
 
+    /// Deletes a tag, taking it off every note that wore it.
+    ///
     /// # Errors
-    /// Fails on a database error.
+    /// Fails if no such tag exists, or on a database error.
     fn delete_tag(&self, id: TagId) -> AppResult<()>;
 
     /// # Errors
@@ -112,8 +114,11 @@ pub trait OrganisationRepository: Send + Sync {
     /// anyway means one link rather than an error, because a list that says the
     /// same thing twice still says something the user can be given.
     ///
+    /// Every tag in it must already exist; the set is written whole or not at
+    /// all.
+    ///
     /// # Errors
-    /// Fails on a database error.
+    /// Fails if any of the tags does not exist, or on a database error.
     fn set_note_tags(&self, note_id: NoteId, tags: &[TagId], now: Timestamp) -> AppResult<()>;
 
     /// Every folder, by name.
@@ -131,8 +136,10 @@ pub trait OrganisationRepository: Send + Sync {
     /// Fails on a database error.
     fn create_folder(&self, name: &LabelName, now: Timestamp) -> AppResult<Folder>;
 
+    /// Deletes a folder, leaving the notes that were in it where they are.
+    ///
     /// # Errors
-    /// Fails on a database error.
+    /// Fails if no such folder exists, or on a database error.
     fn delete_folder(&self, id: FolderId) -> AppResult<()>;
 
     /// # Errors
@@ -141,10 +148,11 @@ pub trait OrganisationRepository: Send + Sync {
 
     /// Replaces the whole set of folders a note is filed under.
     ///
-    /// The slice is a set, on the same terms as [`Self::set_note_tags`].
+    /// The slice is a set and every folder in it must already exist, on the
+    /// same terms as [`Self::set_note_tags`].
     ///
     /// # Errors
-    /// Fails on a database error.
+    /// Fails if any of the folders does not exist, or on a database error.
     fn set_note_folders(
         &self,
         note_id: NoteId,
