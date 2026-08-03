@@ -84,3 +84,4 @@ jobs:
         run: |
           cargo test --manifest-path src-tauri/plugins/reminders/Cargo.toml
           cargo test --manifest-path src-tauri/plugins/documents/Cargo.toml
+          cargo test --manifest-path src-tauri/plugins/appicon/Cargo.toml

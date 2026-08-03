@@ -121,6 +121,9 @@ bun run build
 cargo fmt --check --manifest-path src-tauri/Cargo.toml
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/plugins/reminders/Cargo.toml
+cargo test --manifest-path src-tauri/plugins/documents/Cargo.toml
+cargo test --manifest-path src-tauri/plugins/appicon/Cargo.toml
 bun run test
 bun run test:kotlin
 bun run android:build

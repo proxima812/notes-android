@@ -17,8 +17,7 @@ pub fn init<R: Runtime, C: DeserializeOwned>(
     _app: &AppHandle<R>,
     api: PluginApi<R, C>,
 ) -> crate::Result<Reminders<R>> {
-    let handle =
-        api.register_android_plugin("dev.local.organizer.reminders", "RemindersPlugin")?;
+    let handle = api.register_android_plugin("dev.local.organizer.reminders", "RemindersPlugin")?;
     Ok(Reminders(handle))
 }
 

@@ -130,6 +130,7 @@ mod tests {
             sound_id: "death_and_rebirth".into(),
             sound_label: "Death & Rebirth".into(),
             vibrate: true,
+            snooze_minutes: 10,
         })
         .expect("serializes");
 
@@ -137,6 +138,10 @@ mod tests {
         assert_eq!(value["soundLabel"], "Death & Rebirth");
         assert_eq!(value["vibrate"], true);
         assert_eq!(value["noteId"], "note");
+        assert_eq!(
+            value["snoozeMinutes"], 10,
+            "the Kotlin side reads this key, so the casing is part of the contract"
+        );
     }
 
     #[test]
