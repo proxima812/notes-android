@@ -49,3 +49,5 @@ src-tauri/gen/android/app/src/main/assets/
 src-tauri/gen/android/app/src/main/jniLibs/
 *.apk
 *.aab
+src-tauri/plugins/*/android/.gradle/
+src-tauri/plugins/*/android/build/
