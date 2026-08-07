@@ -88,7 +88,6 @@ define_id!(TaskId, "task_id");
 define_id!(ReminderId, "reminder_id");
 define_id!(ReminderOccurrenceId, "reminder_occurrence_id");
 define_id!(AttachmentId, "attachment_id");
-define_id!(FolderId, "folder_id");
 define_id!(TagId, "tag_id");
 define_id!(TemplateId, "template_id");
 define_id!(SavedSearchId, "saved_search_id");

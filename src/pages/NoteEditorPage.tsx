@@ -162,6 +162,24 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
 
   const gradient = findGradient(color);
 
+  // The colour goes on the document rather than on this screen's own box. The
+  // safe-area strips under the status bar and above the gesture bar are padding
+  // on `#root`, so a background that starts inside them leaves a band of theme
+  // colour at the top and bottom of a coloured note. Painting `<html>` fills the
+  // whole window, insets included, with one gradient instead of two that meet.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (gradient === null) {
+      return;
+    }
+    root.dataset["note"] = gradient.id;
+    root.classList.add("note-surface");
+    return () => {
+      delete root.dataset["note"];
+      root.classList.remove("note-surface");
+    };
+  }, [gradient]);
+
   // Registered after the screen's own guard, so back closes an open panel first
   // and only then leaves the note.
   useBackGuard(showReminder, () => {
@@ -186,12 +204,9 @@ function Loaded({ note, onLeave, onPatch, saving }: LoadedProps): React.JSX.Elem
   );
 
   return (
-    <div
-      // A coloured note paints the whole editor; the ink and the link colour
-      // come with `note-surface`, per theme.
-      data-note={gradient === null ? undefined : gradient.id}
-      className={`flex flex-1 flex-col ${gradient === null ? "" : "note-surface"}`}
-    >
+    // The colour itself is on `<html>` (see the effect above); this box only
+    // lays the screen out. The ink and the link colour arrive by inheritance.
+    <div className="flex flex-1 flex-col">
       <header className="flex items-center gap-1 p-2">
         <button
           type="button"

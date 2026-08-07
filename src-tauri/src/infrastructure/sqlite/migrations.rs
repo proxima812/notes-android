@@ -19,11 +19,18 @@ pub struct Migration {
 
 /// Every migration ever shipped, in ascending order. Append only; never edit an
 /// entry that has already reached a device.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial",
-    sql: include_str!("../../../migrations/0001_initial.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial",
+        sql: include_str!("../../../migrations/0001_initial.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "drop_folders",
+        sql: include_str!("../../../migrations/0002_drop_folders.sql"),
+    },
+];
 
 /// Highest schema version this build understands.
 #[must_use]
@@ -169,8 +176,6 @@ mod tests {
             "reminder_occurrences",
             "tags",
             "note_tags",
-            "folders",
-            "note_folders",
             "attachments",
             "note_links",
             "saved_searches",
@@ -187,6 +192,23 @@ mod tests {
         ] {
             assert!(table_exists(&connection, name), "missing table: {name}");
         }
+    }
+
+    #[test]
+    fn the_folder_tables_are_gone() {
+        // Dropped by 0002. Asserted because the initial migration still creates
+        // them: a database that never ran 0002 would keep working with folders
+        // no code reads any more.
+        let connection = fresh();
+        for name in ["folders", "note_folders"] {
+            assert!(!table_exists(&connection, name), "table still here: {name}");
+        }
+
+        let has_column = connection
+            .prepare("SELECT folder_id FROM tasks")
+            .map(drop)
+            .is_ok();
+        assert!(!has_column, "tasks.folder_id still here");
     }
 
     #[test]

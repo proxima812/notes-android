@@ -8,16 +8,10 @@ import {
   RECURRENCE_RULES,
   recurrenceIdOf,
   type Reminder,
+  type ReminderSoundCatalog,
   type RecurrenceId,
 } from "../api";
-
-interface SoundCatalog {
-  readonly defaultSoundId: string;
-  readonly items: readonly {
-    readonly id: string;
-    readonly label: string;
-  }[];
-}
+import { SoundPicker } from "./SoundPicker";
 
 export interface ReminderFormValue {
   readonly title: string;
@@ -34,7 +28,7 @@ interface ReminderPanelProps {
   readonly existing: readonly Reminder[];
   readonly onEdit: (reminder: Reminder | null) => void;
   readonly onRemove: (id: Reminder["id"]) => void;
-  readonly sounds: SoundCatalog;
+  readonly sounds: ReminderSoundCatalog;
   readonly noteTitle: string;
   readonly busy: boolean;
   readonly error: string | null;
@@ -84,7 +78,7 @@ function initialParts(initial: Reminder | null): { date: string; time: string } 
   return { date: local.slice(0, 10), time: local.slice(11, 16) };
 }
 
-function defaultSoundLabel(sounds: SoundCatalog): string {
+function defaultSoundLabel(sounds: ReminderSoundCatalog): string {
   return (
     sounds.items.find((item) => item.id === sounds.defaultSoundId)?.label ??
     sounds.defaultSoundId
@@ -117,6 +111,15 @@ export function ReminderPanel({
   const [localError, setLocalError] = useState<string | null>(null);
   const [editingPresets, setEditingPresets] = useState(false);
   const [draftPreset, setDraftPreset] = useState("");
+  const [pickingSound, setPickingSound] = useState(false);
+
+  // A system sound can vanish between sessions — the catalog no longer lists
+  // its uri — and an honest "unavailable" beats showing the raw id.
+  const soundLabel =
+    sound === "default"
+      ? t("reminder.defaultSound", { label: defaultSoundLabel(sounds) })
+      : (sounds.items.find((item) => item.id === sound)?.label ??
+        t("reminder.soundMissing"));
 
   useEffect(() => {
     const next = initialParts(initial);
@@ -166,6 +169,7 @@ export function ReminderPanel({
   return (
     <section
       aria-label={t("reminder.title")}
+      data-panel=""
       className="bg-surface-sunken border-border-subtle rounded-2xl border p-4"
     >
       <div className="mb-3 flex min-h-11 items-center gap-3">
@@ -384,42 +388,23 @@ export function ReminderPanel({
           </PickerField>
         </label>
 
-        <fieldset>
-          <legend className="text-content-muted mb-1 text-sm">{t("reminder.sound")}</legend>
-          <div className="space-y-1">
-            <label className="text-content flex min-h-11 items-center gap-3 rounded-xl px-2">
-              <input
-                type="radio"
-                name="reminder-sound"
-                value="default"
-                checked={sound === "default"}
-                onChange={(event) => {
-                  setSound(event.target.value);
-                }}
-                className="size-5 accent-accent"
-              />
-              <span className="text-sm">{t("reminder.defaultSound", { label: defaultSoundLabel(sounds) })}</span>
-            </label>
-            {sounds.items.map((item) => (
-              <label
-                key={item.id}
-                className="text-content flex min-h-11 items-center gap-3 rounded-xl px-2"
-              >
-                <input
-                  type="radio"
-                  name="reminder-sound"
-                  value={item.id}
-                  checked={sound === item.id}
-                  onChange={(event) => {
-                    setSound(event.target.value);
-                  }}
-                  className="size-5 accent-accent"
-                />
-                <span className="text-sm">{item.label}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        <div className="text-content-muted block text-sm">
+          {t("reminder.sound")}
+          <PickerField className="mt-1">
+            <button
+              type="button"
+              aria-label={t("reminder.sound")}
+              aria-haspopup="dialog"
+              aria-expanded={pickingSound}
+              onClick={() => {
+                setPickingSound(true);
+              }}
+              className={`${PICKER_CLASSES} flex items-center text-left`}
+            >
+              <span className="min-w-0 flex-1 truncate">{soundLabel}</span>
+            </button>
+          </PickerField>
+        </div>
 
         {initial?.isExact === false && (
           <p className="text-content-muted text-sm">
@@ -455,6 +440,20 @@ export function ReminderPanel({
           )}
         </div>
       </form>
+
+      {pickingSound && (
+        <SoundPicker
+          sounds={sounds}
+          selected={sound}
+          onSelect={(next) => {
+            setSound(next);
+            setLocalError(null);
+          }}
+          onClose={() => {
+            setPickingSound(false);
+          }}
+        />
+      )}
     </section>
   );
 }

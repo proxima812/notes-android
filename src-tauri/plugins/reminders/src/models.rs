@@ -63,6 +63,47 @@ pub struct CancelAllResponse {
     pub cancelled: u32,
 }
 
+/// One selectable notification sound as the device reports it.
+///
+/// The id carries its origin as a prefix — `system:<uri>` for a ringtone the
+/// OS ships, `custom:<fileName>` for a file the user imported — so the Rust
+/// core can tell them apart without a second field.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SoundOption {
+    pub id: String,
+    pub label: String,
+}
+
+/// Every sound the device offers beyond the bundled presets.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeviceSounds {
+    #[serde(default)]
+    pub system: Vec<SoundOption>,
+    #[serde(default)]
+    pub custom: Vec<SoundOption>,
+}
+
+/// What came back from the system file picker.
+///
+/// Mirrors [`BackupOutcomeDto`]-style reporting: backing out of the picker is
+/// `completed: false`, not an error.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PickCustomOutcome {
+    pub completed: bool,
+    #[serde(default)]
+    pub sound: Option<SoundOption>,
+}
+
+/// Names one sound for the commands that act on a single id.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SoundIdArgs {
+    pub id: String,
+}
+
 /// Mirrors the states Tauri's Android permission layer reports.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -151,5 +192,33 @@ mod tests {
         // null.
         let target: LaunchTarget = serde_json::from_str("{}").expect("deserializes");
         assert_eq!(target.note_id, None);
+    }
+
+    #[test]
+    fn device_sounds_read_an_empty_object_as_no_sounds() {
+        // Kotlin's `JSObject.put` drops empty answers, so both lists default.
+        let sounds: DeviceSounds = serde_json::from_str("{}").expect("deserializes");
+        assert!(sounds.system.is_empty());
+        assert!(sounds.custom.is_empty());
+    }
+
+    #[test]
+    fn a_cancelled_pick_arrives_without_a_sound() {
+        let outcome: PickCustomOutcome =
+            serde_json::from_str(r#"{"completed":false}"#).expect("deserializes");
+        assert!(!outcome.completed);
+        assert!(outcome.sound.is_none());
+    }
+
+    #[test]
+    fn a_completed_pick_carries_the_sound_in_camel_case() {
+        let outcome: PickCustomOutcome = serde_json::from_str(
+            r#"{"completed":true,"sound":{"id":"custom:beep.ogg","label":"beep"}}"#,
+        )
+        .expect("deserializes");
+        assert!(outcome.completed);
+        let sound = outcome.sound.expect("sound present");
+        assert_eq!(sound.id, "custom:beep.ogg");
+        assert_eq!(sound.label, "beep");
     }
 }

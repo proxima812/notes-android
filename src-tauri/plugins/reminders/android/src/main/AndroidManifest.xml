@@ -27,6 +27,15 @@
         <!-- Exported because these are protected system broadcasts: only the
              system can send them, and from API 31 a receiver with an
              intent-filter has to say so explicitly. -->
+        <!-- Exported so the system can read the user's trimmed notification
+             sounds: a channel's sound is played outside this app's process.
+             The provider itself only serves files from its own directory,
+             read-only. -->
+        <provider
+            android:name="dev.local.organizer.reminders.ReminderSoundProvider"
+            android:authorities="dev.local.organizer.reminder_sounds"
+            android:exported="true" />
+
         <receiver
             android:name="dev.local.organizer.reminders.BootReceiver"
             android:exported="true"

@@ -1,6 +1,6 @@
 [package]
 name = "notes-android"
-version = "1.0.0"
+version = "1.1.0"
 description = "Local-only notes, search and reminders"
 authors = ["local"]
 edition = "2021"

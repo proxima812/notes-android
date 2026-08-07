@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::ids::{FolderId, NoteId, TagId};
+use crate::domain::ids::{NoteId, TagId};
 use crate::error::AppResult;
 
 use super::{Note, NoteDraft, NotePatch};
@@ -29,7 +29,6 @@ pub enum NoteScope {
 #[derive(Debug, Clone, Default)]
 pub struct NoteFilter {
     pub scope: NoteScope,
-    pub folder_id: Option<FolderId>,
     pub tag_id: Option<TagId>,
     pub note_type: Option<super::NoteType>,
     pub pinned_only: bool,

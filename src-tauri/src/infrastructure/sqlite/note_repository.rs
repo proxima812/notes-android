@@ -99,15 +99,6 @@ fn where_clause(filter: &NoteFilter) -> (String, Vec<Value>) {
         conditions.push("notes.is_pinned = 1".to_owned());
     }
 
-    if let Some(folder_id) = filter.folder_id {
-        conditions.push(
-            "EXISTS (SELECT 1 FROM note_folders nf \
-             WHERE nf.note_id = notes.id AND nf.folder_id = ?)"
-                .to_owned(),
-        );
-        params.push(Value::Text(folder_id.to_string()));
-    }
-
     if let Some(tag_id) = filter.tag_id {
         conditions.push(
             "EXISTS (SELECT 1 FROM note_tags nt \
@@ -530,14 +521,6 @@ impl NoteRepository for SqliteNoteRepository {
                 .execute(
                     "INSERT INTO note_tags (note_id, tag_id, created_at)
                      SELECT ?1, tag_id, ?2 FROM note_tags WHERE note_id = ?3",
-                    rusqlite::params![new_id, now, id],
-                )
-                .map_err(AppError::from)?;
-
-            transaction
-                .execute(
-                    "INSERT INTO note_folders (note_id, folder_id, created_at)
-                     SELECT ?1, folder_id, ?2 FROM note_folders WHERE note_id = ?3",
                     rusqlite::params![new_id, now, id],
                 )
                 .map_err(AppError::from)?;

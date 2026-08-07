@@ -6,12 +6,15 @@ import {
   DEFAULT_THEME_ID,
   applyTheme,
   isThemeId,
+  loadStoredTheme,
   loadTheme,
   saveTheme,
 } from "./theme";
 
 describe("app themes", () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     window.localStorage.clear();
     delete document.documentElement.dataset["theme"];
   });
@@ -27,7 +30,17 @@ describe("app themes", () => {
   it("falls back to the default when storage holds an unknown id", () => {
     window.localStorage.setItem("xkeeps.theme", "chartreuse");
 
+    expect(loadStoredTheme()).toBeNull();
     expect(loadTheme()).toBe(DEFAULT_THEME_ID);
+  });
+
+  it("opens in the default when nothing was ever picked", () => {
+    expect(loadTheme()).toBe(DEFAULT_THEME_ID);
+    expect(DEFAULT_THEME_ID).toBe("obsidian");
+  });
+
+  it("has no light theme left to fall back to", () => {
+    expect(APP_THEME_IDS).not.toContain("porcelain");
   });
 
   it("round-trips a saved theme", () => {
@@ -47,9 +60,9 @@ describe("app themes", () => {
   });
 
   it("drives the attribute the stylesheet selects on", () => {
-    applyTheme("porcelain");
+    applyTheme("amethyst");
 
-    expect(document.documentElement.dataset["theme"]).toBe("porcelain");
+    expect(document.documentElement.dataset["theme"]).toBe("amethyst");
   });
 
   it("rejects a non-theme string", () => {

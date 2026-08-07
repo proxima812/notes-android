@@ -17,9 +17,9 @@ use crate::state::AppState;
 
 use super::dto::{
     AppIconCatalogDto, BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest,
-    FolderDto, ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, ReminderDto,
-    ReminderSoundCatalogDto, SearchHitDto, SearchRequest, TagDto, TaskDto, TaskProgressDto,
-    UpdateNoteRequest, UpsertReminderRequest,
+    ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, ReminderDto,
+    ReminderSoundCatalogDto, ReminderSoundDto, SearchHitDto, SearchRequest, TagDto, TaskDto,
+    TaskProgressDto, UpdateNoteRequest, UpsertReminderRequest,
 };
 use super::use_cases::move_note_to_trash;
 
@@ -106,10 +106,19 @@ pub async fn notes_list(
     request: ListNotesRequest,
 ) -> Result<CommandResult<PageDto<NoteSummaryDto>>, ()> {
     let notes = Arc::clone(&state.notes);
+    let organisation = Arc::clone(&state.organisation);
     Ok(blocking(move || {
-        notes
-            .list(&request)
-            .map(|page| PageDto::from_page(page, NoteSummaryDto::from))
+        let page = notes.list(&request)?;
+        // One read for the whole page rather than one per card.
+        let ids: Vec<_> = page.items.iter().map(|note| note.id).collect();
+        let tags = organisation.tags_of_notes(&ids)?;
+        Ok(PageDto::from_page(page, |note| {
+            let names = tags
+                .get(&note.id)
+                .map(|tags| tags.iter().map(|tag| tag.name.clone()).collect())
+                .unwrap_or_default();
+            NoteSummaryDto::from(note).with_tags(names)
+        }))
     })
     .await)
 }
@@ -222,6 +231,47 @@ pub async fn reminder_sounds_list(
 ) -> Result<CommandResult<ReminderSoundCatalogDto>, ()> {
     let reminders = Arc::clone(&state.reminders);
     Ok(blocking(move || reminders.sound_catalog().map(ReminderSoundCatalogDto::from)).await)
+}
+
+/// Opens the system file picker so the user can import a sound of their own.
+/// `None` means the user backed out, which is not an error.
+#[tauri::command]
+pub async fn reminder_sound_pick_custom(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<Option<ReminderSoundDto>>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || {
+        reminders
+            .pick_custom_sound()
+            .map(|sound| sound.map(ReminderSoundDto::custom))
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn reminder_sound_delete_custom(
+    state: State<'_, AppState>,
+    sound_id: String,
+) -> Result<CommandResult<()>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.delete_custom_sound(&sound_id)).await)
+}
+
+#[tauri::command]
+pub async fn reminder_sound_preview(
+    state: State<'_, AppState>,
+    sound_id: String,
+) -> Result<CommandResult<()>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.preview_sound(&sound_id)).await)
+}
+
+#[tauri::command]
+pub async fn reminder_sound_preview_stop(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<()>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || reminders.stop_preview()).await)
 }
 
 /// Writes a snapshot and asks the user where to keep it.
@@ -359,64 +409,6 @@ pub async fn tags_set_for_note(
         organisation
             .set_note_tags(&note_id, &tags)
             .map(|tags| tags.into_iter().map(TagDto::from).collect())
-    })
-    .await)
-}
-
-#[tauri::command]
-pub async fn folders_list(state: State<'_, AppState>) -> Result<CommandResult<Vec<FolderDto>>, ()> {
-    let organisation = Arc::clone(&state.organisation);
-    Ok(blocking(move || {
-        organisation
-            .folders()
-            .map(|folders| folders.into_iter().map(FolderDto::from).collect())
-    })
-    .await)
-}
-
-#[tauri::command]
-pub async fn folders_create(
-    state: State<'_, AppState>,
-    name: String,
-) -> Result<CommandResult<FolderDto>, ()> {
-    let organisation = Arc::clone(&state.organisation);
-    Ok(blocking(move || organisation.create_folder(&name).map(FolderDto::from)).await)
-}
-
-#[tauri::command]
-pub async fn folders_delete(
-    state: State<'_, AppState>,
-    id: String,
-) -> Result<CommandResult<()>, ()> {
-    let organisation = Arc::clone(&state.organisation);
-    Ok(blocking(move || organisation.delete_folder(&id)).await)
-}
-
-#[tauri::command]
-pub async fn folders_of_note(
-    state: State<'_, AppState>,
-    note_id: String,
-) -> Result<CommandResult<Vec<FolderDto>>, ()> {
-    let organisation = Arc::clone(&state.organisation);
-    Ok(blocking(move || {
-        organisation
-            .folders_of_note(&note_id)
-            .map(|folders| folders.into_iter().map(FolderDto::from).collect())
-    })
-    .await)
-}
-
-#[tauri::command]
-pub async fn folders_set_for_note(
-    state: State<'_, AppState>,
-    note_id: String,
-    folders: Vec<String>,
-) -> Result<CommandResult<Vec<FolderDto>>, ()> {
-    let organisation = Arc::clone(&state.organisation);
-    Ok(blocking(move || {
-        organisation
-            .set_note_folders(&note_id, &folders)
-            .map(|folders| folders.into_iter().map(FolderDto::from).collect())
     })
     .await)
 }

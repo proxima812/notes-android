@@ -6,7 +6,21 @@ use tauri::{AppHandle, Runtime};
 use tauri_plugin_reminders::{CancelRequest, RemindersExt as _, ScheduleRequest};
 
 use crate::error::{AppResult, NotificationError, PlatformError};
-use crate::platform::alarms::{Alarm, AlarmClock, AlarmPermissions};
+use crate::platform::alarms::{Alarm, AlarmClock, AlarmPermissions, DeviceSounds, SoundOption};
+
+fn plugin_error(error: tauri_plugin_reminders::Error) -> crate::error::AppError {
+    PlatformError::PluginCall {
+        reason: error.to_string(),
+    }
+    .into()
+}
+
+fn option_from(sound: tauri_plugin_reminders::SoundOption) -> SoundOption {
+    SoundOption {
+        id: sound.id,
+        label: sound.label,
+    }
+}
 
 pub struct TauriAlarmClock<R: Runtime> {
     app: AppHandle<R>,
@@ -114,5 +128,48 @@ impl<R: Runtime> AlarmClock for TauriAlarmClock<R> {
                 }
                 .into()
             })
+    }
+
+    fn device_sounds(&self) -> AppResult<DeviceSounds> {
+        self.app
+            .reminders()
+            .list_device_sounds()
+            .map(|sounds| DeviceSounds {
+                system: sounds.system.into_iter().map(option_from).collect(),
+                custom: sounds.custom.into_iter().map(option_from).collect(),
+            })
+            .map_err(plugin_error)
+    }
+
+    fn pick_custom_sound(&self) -> AppResult<Option<SoundOption>> {
+        self.app
+            .reminders()
+            .pick_custom_sound()
+            .map(|outcome| {
+                if outcome.completed {
+                    outcome.sound.map(option_from)
+                } else {
+                    None
+                }
+            })
+            .map_err(plugin_error)
+    }
+
+    fn delete_custom_sound(&self, id: &str) -> AppResult<()> {
+        self.app
+            .reminders()
+            .delete_custom_sound(id.to_owned())
+            .map_err(plugin_error)
+    }
+
+    fn preview_sound(&self, id: &str) -> AppResult<()> {
+        self.app
+            .reminders()
+            .preview_sound(id.to_owned())
+            .map_err(plugin_error)
+    }
+
+    fn stop_preview(&self) -> AppResult<()> {
+        self.app.reminders().stop_preview().map_err(plugin_error)
     }
 }

@@ -9,9 +9,12 @@ import { applyTheme, loadTheme, saveTheme, type AppThemeId } from "./theme";
  * screens that offer a picker are never mounted at the same time, and the paint
  * itself happens through a `<html>` attribute, so nothing else has to re-render
  * when the theme changes.
+ *
+ * The phone's light/dark setting is not consulted: every theme here is dark, so
+ * there is nothing for it to switch between.
  */
 export function useTheme(): readonly [AppThemeId, (id: AppThemeId) => void] {
-  const [theme, setTheme] = useState<AppThemeId>(() => loadTheme());
+  const [theme, setTheme] = useState<AppThemeId>(loadTheme);
 
   const choose = (id: AppThemeId): void => {
     setTheme(id);

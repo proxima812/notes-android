@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::domain::clock::Timestamp;
-use crate::domain::ids::{FolderId, TagId};
+use crate::domain::ids::TagId;
 use crate::domain::notes::NoteType;
 use crate::error::AppResult;
 
@@ -27,7 +27,6 @@ pub struct SearchQuery {
     pub text: String,
     /// Which indexes to consult. Empty means all of them.
     pub entities: Vec<SearchEntity>,
-    pub folder_id: Option<FolderId>,
     pub tag_id: Option<TagId>,
     pub note_type: Option<NoteType>,
     pub created_after: Option<Timestamp>,

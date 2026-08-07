@@ -4,9 +4,9 @@
 
 /* Themes.
    One axis, not two: every theme sets the whole palette, so the picker is a flat
-   list of six rather than a base-times-accent matrix the UI would have to
-   explain. `:root` carries the default (Мята) so nothing is unstyled before the
-   attribute lands.
+   list of five rather than a base-times-accent matrix the UI would have to
+   explain. All five are dark — the app has no light palette. `:root` carries the
+   default (Обсидиан) so nothing is unstyled before the attribute lands.
 
    `--app-brand` is a gradient, so it is a plain custom property rather than a
    `@theme` colour, and is spent via `bg-[image:var(--app-brand)]`. */
@@ -29,15 +29,22 @@
 
 /* Shared dark base for the four coloured themes. Each of those then overrides
    only its accent, which is why they cannot drift apart on contrast. */
-:root,
 [data-theme="mint"],
 [data-theme="indigo"],
 [data-theme="amethyst"],
 [data-theme="amber"] {
+  /* Tells the WebView which way round everything it draws itself goes: the date
+     and time pickers, the scrollbars, the caret. Without it they arrive white on
+     a dark theme. */
+  color-scheme: dark;
   --app-surface: oklch(21% 0.011 255);
-  --app-surface-raised: oklch(25% 0.012 255);
-  --app-surface-sunken: oklch(17% 0.010 255);
-  --app-border-subtle: oklch(32% 0.013 255);
+  /* The three depths are held a full step apart rather than a hair: on a phone
+     held at arm's length, a card that is 4% lighter than the page reads as the
+     page. Same reason the border is well clear of the surface it sits on —
+     it is what makes a button a button when nothing else outlines it. */
+  --app-surface-raised: oklch(27% 0.013 255);
+  --app-surface-sunken: oklch(15% 0.010 255);
+  --app-border-subtle: oklch(41% 0.015 255);
   --app-content: oklch(95% 0.005 255);
   --app-content-muted: oklch(70% 0.011 255);
   --app-danger: oklch(68% 0.16 25);
@@ -46,9 +53,7 @@
   --app-link: oklch(76% 0.13 240);
 }
 
-/* Mint is the default: it is the launcher icon's own colour, so the first screen
-   after tapping the icon is not a different colour than the icon. */
-:root,
+/* Мята is the launcher icon's own colour. */
 [data-theme="mint"] {
   --app-accent: oklch(85% 0.165 163);
   --app-accent-content: oklch(20% 0.04 163);
@@ -78,12 +83,19 @@
 }
 
 /* Обсидиан — true black, Vercel-style: the accent is the foreground itself and
-   colour is spent only on state, which is also what suits the OLED panel. */
+   colour is spent only on state, which is also what suits the OLED panel.
+   It is the default, so it also covers the frame before `main.tsx` sets the
+   attribute; that selector must stay more specific than the plain
+   `[data-theme="…"]` rules so it cannot outrank a theme that was chosen. */
+:root:not([data-theme]),
 [data-theme="obsidian"] {
+  color-scheme: dark;
   --app-surface: oklch(0% 0 0);
-  --app-surface-raised: oklch(14% 0 90);
-  --app-surface-sunken: oklch(0% 0 0);
-  --app-border-subtle: oklch(30% 0 90);
+  --app-surface-raised: oklch(17% 0 90);
+  /* Not black like the surface: a sunken well on true black is invisible, and
+     it is what tells an input apart from the page it sits on. */
+  --app-surface-sunken: oklch(9% 0 90);
+  --app-border-subtle: oklch(40% 0 90);
   --app-content: oklch(95% 0 90);
   --app-content-muted: oklch(71% 0 90);
   --app-accent: oklch(95% 0 90);
@@ -94,29 +106,12 @@
   --app-glow: oklch(60% 0 90);
 }
 
-/* Фарфор — the only light theme, shadcn-style zinc. */
-[data-theme="porcelain"] {
-  --app-surface: oklch(100% 0 90);
-  --app-surface-raised: oklch(100% 0 90);
-  --app-surface-sunken: oklch(97% 0.001 286);
-  --app-border-subtle: oklch(92% 0.004 286);
-  --app-content: oklch(14% 0.004 286);
-  --app-content-muted: oklch(55% 0.014 286);
-  --app-accent: oklch(21% 0.006 286);
-  --app-accent-content: oklch(99% 0 90);
-  --app-danger: oklch(58% 0.215 27);
-  /* Darker, because this blue is read on white. */
-  --app-link: oklch(52% 0.19 253);
-  --app-brand: linear-gradient(135deg, oklch(21% 0.006 286) 0%, oklch(44% 0.015 286) 100%);
-  --app-glow: oklch(70% 0.02 286);
-}
-
 /* Note colours.
 
    A preset carries only two hues; the theme decides how light and how saturated
    a coloured note is and what ink goes on it. That split is the whole point: one
-   fixed set of colours cannot be a dark slab on the white theme, a soft tint on
-   the dark ones and not a glowing block on true black.
+   fixed set of colours cannot be a soft tint on the coloured themes and not a
+   glowing block on true black.
 
    Presets are the identifiers stored in `notes.color` (see `gradients.ts`).
    `--note-c-scale` exists for Графит, which is the same construction with the
@@ -163,8 +158,10 @@
   --note-l2: 31%;
   --note-c1: 0.078;
   --note-c2: 0.072;
-  --note-lb: 46%;
-  --note-cb: 0.072;
+  /* The border runs clearly lighter than the block it edges: a card whose edge
+     is only a shade off its own fill loses its corners against the page. */
+  --note-lb: 53%;
+  --note-cb: 0.076;
   --note-ink: oklch(97% 0.004 255);
   --note-ink-muted: oklch(97% 0.004 255 / 0.72);
   --note-link: oklch(83% 0.11 240);
@@ -183,33 +180,92 @@
 /* Обсидиан sits on true black, where the dark-theme block reads as a lit panel.
    Same colours, pulled down and desaturated until the card is a shape rather
    than a light source. */
-[data-theme="obsidian"] .note-surface {
+/* The second selector is `<html>` itself: an open coloured note puts
+   `note-surface` on the same element that carries `data-theme`, where the
+   descendant selector cannot reach it. */
+[data-theme="obsidian"] .note-surface,
+[data-theme="obsidian"].note-surface {
   --note-l1: 25%;
   --note-l2: 19%;
   --note-c1: 0.055;
   --note-c2: 0.050;
-  --note-lb: 34%;
-  --note-cb: 0.045;
-}
-
-/* Фарфор inverts it: on white, a dark card is a hole in the page. The colour
-   becomes a tint and the ink goes dark, carrying a little of the note's own hue
-   so the card still reads as coloured rather than as grey text on pastel. */
-[data-theme="porcelain"] .note-surface {
-  --note-l1: 96%;
-  --note-l2: 92.5%;
-  --note-c1: 0.042;
-  --note-c2: 0.050;
-  --note-lb: 87%;
-  --note-cb: 0.055;
-  --note-ink: oklch(26% 0.045 var(--note-h1));
-  --note-ink-muted: oklch(45% 0.038 var(--note-h1));
-  --note-link: oklch(48% 0.19 253);
+  --note-lb: 43%;
+  --note-cb: 0.050;
 }
 
 /* Secondary text on a coloured note. */
 .note-surface .note-ink-muted {
   color: var(--note-ink-muted);
+}
+
+/* When the colour is on `<html>`, the body's own theme background would cover
+   it; the gradient is the page now. */
+html.note-surface body {
+  background-color: transparent;
+}
+
+/* Panels inside a coloured note — the checklist, the tags, the reminder — are
+   surfaces of the theme by default, which lands three grey slabs on top of the
+   note. On a coloured note they become the note's own ink, thinned. */
+.note-surface [data-panel] {
+  background-color: color-mix(in oklab, var(--note-ink) 8%, transparent);
+  border-color: color-mix(in oklab, var(--note-ink) 22%, transparent);
+}
+
+.note-surface [data-panel] input,
+.note-surface [data-panel] textarea {
+  background-color: color-mix(in oklab, var(--note-ink) 10%, transparent);
+  border-color: color-mix(in oklab, var(--note-ink) 24%, transparent);
+  color: var(--note-ink);
+}
+
+.note-surface [data-panel] input::placeholder,
+.note-surface [data-panel] textarea::placeholder {
+  color: var(--note-ink-muted);
+}
+
+/* Checkboxes are drawn here rather than left to the WebView. `accent-color`
+   only paints the filled box; the empty one keeps Chromium's own grey-on-white
+   square, which is a light-theme control sitting in a dark app. Drawing the
+   whole thing costs three rules and makes the box answer to the palette — and,
+   inside a coloured note, to that note's ink. */
+.checkbox {
+  appearance: none;
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 1.5px solid var(--checkbox-line, var(--app-content-muted));
+  border-radius: 0.375rem;
+  background-color: transparent;
+  display: grid;
+  place-content: center;
+  transition:
+    background-color var(--animate-duration-fast) ease,
+    border-color var(--animate-duration-fast) ease;
+}
+
+.checkbox:checked {
+  background-color: var(--checkbox-line, var(--app-accent));
+  border-color: var(--checkbox-line, var(--app-accent));
+}
+
+/* The tick: two sides of a small box, turned. Cheaper than an inline SVG and it
+   inherits nothing that could go missing. */
+.checkbox:checked::after {
+  content: "";
+  width: 0.3rem;
+  height: 0.6rem;
+  margin-top: -0.1rem;
+  border: solid var(--checkbox-mark, var(--app-accent-content));
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.note-surface .checkbox {
+  --checkbox-line: var(--note-ink);
+  /* The tick is a hole in the filled box, so it takes the note's own colour
+     rather than the theme's accent ink. */
+  --checkbox-mark: oklch(var(--note-l1) calc(var(--note-c1) * var(--note-c-scale)) var(--note-h1));
 }
 
 @layer base {

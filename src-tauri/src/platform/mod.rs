@@ -10,7 +10,7 @@ pub mod tauri_alarms;
 pub mod tauri_app_icons;
 pub mod tauri_documents;
 
-pub use alarms::{Alarm, AlarmClock, AlarmPermissions};
+pub use alarms::{Alarm, AlarmClock, AlarmPermissions, DeviceSounds, SoundOption};
 pub use app_icons::AppIconSwitch;
 pub use documents::{DocumentStore, PickedDocument};
 pub use tauri_alarms::TauriAlarmClock;

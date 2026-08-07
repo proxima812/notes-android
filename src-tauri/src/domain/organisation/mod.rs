@@ -1,14 +1,16 @@
-//! Folders and tags: the two ways a note can be put somewhere.
+//! Tags: the way a note is put somewhere.
 //!
-//! Both are flat here. The schema allows nested folders, and the column stays,
-//! but a hierarchy the interface cannot show would be a feature only the
-//! database knows about — so nesting waits until there is a screen for it.
+//! Folders were the other way and are gone — two answers to «where does this
+//! note live» asked the user the same question twice, and the flat folders the
+//! interface could show were tags wearing a different chip.
 //!
-//! Filtering the library by either is already the note repository's job; this
+//! Filtering the library by a tag is already the note repository's job; this
 //! module is about the labels themselves and which notes wear them.
 
+use std::collections::HashMap;
+
 use crate::domain::clock::Timestamp;
-use crate::domain::ids::{FolderId, NoteId, TagId};
+use crate::domain::ids::{NoteId, TagId};
 use crate::error::{AppError, AppResult, ValidationError};
 
 /// Longest a label may be. Long enough for a sentence fragment, short enough to
@@ -21,13 +23,6 @@ pub struct Tag {
     pub name: String,
     /// How many notes wear it, for showing the useful ones first.
     pub usage_count: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Folder {
-    pub id: FolderId,
-    pub name: String,
-    pub note_count: i64,
 }
 
 /// A label the user typed, trimmed and accepted, alongside the key it is
@@ -108,6 +103,16 @@ pub trait OrganisationRepository: Send + Sync {
     /// Fails on a database error.
     fn tags_of_note(&self, note_id: NoteId) -> AppResult<Vec<Tag>>;
 
+    /// The tags of every note in the slice, in one read.
+    ///
+    /// A library page asks for the tags of fifty notes at once; asking per note
+    /// would be fifty round trips for a row of chips. Notes without tags are
+    /// absent from the map rather than present with an empty list.
+    ///
+    /// # Errors
+    /// Fails on a database error.
+    fn tags_of_notes(&self, notes: &[NoteId]) -> AppResult<HashMap<NoteId, Vec<Tag>>>;
+
     /// Replaces the whole set of tags on a note.
     ///
     /// The slice is a set: callers hand over each id once, and an id repeated
@@ -120,45 +125,6 @@ pub trait OrganisationRepository: Send + Sync {
     /// # Errors
     /// Fails if any of the tags does not exist, or on a database error.
     fn set_note_tags(&self, note_id: NoteId, tags: &[TagId], now: Timestamp) -> AppResult<()>;
-
-    /// Every folder, by name.
-    ///
-    /// # Errors
-    /// Fails on a database error.
-    fn folders(&self) -> AppResult<Vec<Folder>>;
-
-    /// Creates a folder under the given name.
-    ///
-    /// Unlike a tag, a folder is not looked up first: two drawers may fairly
-    /// carry the same label, and it is the user who decides they are the same.
-    ///
-    /// # Errors
-    /// Fails on a database error.
-    fn create_folder(&self, name: &LabelName, now: Timestamp) -> AppResult<Folder>;
-
-    /// Deletes a folder, leaving the notes that were in it where they are.
-    ///
-    /// # Errors
-    /// Fails if no such folder exists, or on a database error.
-    fn delete_folder(&self, id: FolderId) -> AppResult<()>;
-
-    /// # Errors
-    /// Fails on a database error.
-    fn folders_of_note(&self, note_id: NoteId) -> AppResult<Vec<Folder>>;
-
-    /// Replaces the whole set of folders a note is filed under.
-    ///
-    /// The slice is a set and every folder in it must already exist, on the
-    /// same terms as [`Self::set_note_tags`].
-    ///
-    /// # Errors
-    /// Fails if any of the folders does not exist, or on a database error.
-    fn set_note_folders(
-        &self,
-        note_id: NoteId,
-        folders: &[FolderId],
-        now: Timestamp,
-    ) -> AppResult<()>;
 }
 
 #[cfg(test)]

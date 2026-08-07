@@ -13,11 +13,13 @@ use crate::domain::notes::{
 };
 use crate::domain::reminders::{
     parse_zone, recurrence, reinterpret, resolve_sound, sound_presets, time_presets, Recurrence,
-    ReminderDraft, ReminderRepository, ScheduledReminder, SoundPreset, FALLBACK_SOUND_ID, WINDOW,
+    ReminderDraft, ReminderRepository, ResolvedSound, ScheduledReminder,
+    CUSTOM_SOUND_FALLBACK_LABEL, CUSTOM_SOUND_PREFIX, FALLBACK_SOUND_ID,
+    SYSTEM_SOUND_FALLBACK_LABEL, WINDOW,
 };
 use crate::domain::search::{SearchHit, SearchRepository};
 use crate::error::{AppError, AppResult, NotificationError, ReminderError, ValidationError};
-use crate::platform::{Alarm, AlarmClock};
+use crate::platform::{Alarm, AlarmClock, DeviceSounds, SoundOption};
 
 use super::dto::{ListNotesRequest, SearchRequest, UpsertReminderRequest};
 
@@ -93,16 +95,43 @@ impl NoteUseCases {
     }
 }
 
+/// The sound a reminder will actually make, with everything both sides need:
+/// the catalog id for the frontend, the label for the notification channel,
+/// and what the Kotlin side is handed to play it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EffectiveSound {
+    pub id: String,
+    pub label: String,
+    /// The raw-resource name for a preset; the full prefixed id for a device
+    /// sound.
+    pub alarm_sound_id: String,
+}
+
 #[derive(Debug)]
 pub struct ReminderView {
     pub scheduled: ScheduledReminder,
-    pub effective_sound: SoundPreset,
+    pub effective_sound: EffectiveSound,
+}
+
+/// Where a catalog entry comes from, so the frontend can group them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SoundKind {
+    Preset,
+    System,
+    Custom,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogSound {
+    pub id: String,
+    pub label: String,
+    pub kind: SoundKind,
 }
 
 #[derive(Debug)]
 pub struct ReminderSoundCatalog {
     pub default_sound_id: String,
-    pub items: Vec<SoundPreset>,
+    pub items: Vec<CatalogSound>,
 }
 
 pub struct ReminderUseCases {
@@ -132,12 +161,17 @@ impl ReminderUseCases {
     pub fn list_for_note(&self, note_id: &str) -> AppResult<Vec<ReminderView>> {
         let note_id = NoteId::parse(note_id)?;
         let configured_default = self.reminders.default_sound_id()?;
+        let mut device = None;
         self.reminders
             .list_for_note(note_id, self.clock.now())?
             .into_iter()
             .map(|scheduled| {
-                let effective_sound =
-                    resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
+                let effective_sound = effective_sound(
+                    self.alarms.as_ref(),
+                    &scheduled.reminder.sound,
+                    configured_default.as_deref(),
+                    &mut device,
+                )?;
                 Ok(ReminderView {
                     scheduled,
                     effective_sound,
@@ -176,7 +210,12 @@ impl ReminderUseCases {
             .transpose()?;
 
         let configured_default = self.reminders.default_sound_id()?;
-        let effective_sound = resolve_sound(&request.sound, configured_default.as_deref())?;
+        let effective_sound = effective_sound(
+            self.alarms.as_ref(),
+            &request.sound,
+            configured_default.as_deref(),
+            &mut None,
+        )?;
         let permissions = self.alarms.permissions()?;
         if !permissions.notifications_granted && !self.alarms.request_notification_permission()? {
             return Err(AppError::Notification(
@@ -221,7 +260,7 @@ impl ReminderUseCases {
             draft,
             &mut |next| {
                 armed.push(next.occurrence.alarm_request_code);
-                alarms.schedule(&alarm_from(next, effective_sound))
+                alarms.schedule(&alarm_from(next, &effective_sound))
             },
             &mut |code| alarms.cancel(code),
         );
@@ -255,6 +294,7 @@ impl ReminderUseCases {
 
         let configured_default = self.reminders.default_sound_id()?;
         let alarms = Arc::clone(&self.alarms);
+        let mut device = None;
         let mut added = 0;
 
         for thin in self.reminders.thin_windows(now, WINDOW)? {
@@ -262,8 +302,12 @@ impl ReminderUseCases {
                 tracing::warn!("a repeating reminder carries a zone this build does not know");
                 continue;
             };
-            let Ok(sound) = resolve_sound(&thin.reminder.sound, configured_default.as_deref())
-            else {
+            let Ok(sound) = effective_sound(
+                self.alarms.as_ref(),
+                &thin.reminder.sound,
+                configured_default.as_deref(),
+                &mut device,
+            ) else {
                 tracing::warn!("a repeating reminder names a sound this build does not have");
                 continue;
             };
@@ -281,7 +325,7 @@ impl ReminderUseCases {
             match self
                 .reminders
                 .extend_window(&thin.reminder, &instants, &mut |next| {
-                    alarms.schedule(&alarm_from(next, sound))
+                    alarms.schedule(&alarm_from(next, &sound))
                 }) {
                 Ok(count) => added += count,
                 Err(error) => tracing::warn!(%error, "a repeating reminder could not be extended"),
@@ -309,8 +353,12 @@ impl ReminderUseCases {
 
         scheduled
             .map(|scheduled| {
-                let effective_sound =
-                    resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())?;
+                let effective_sound = effective_sound(
+                    self.alarms.as_ref(),
+                    &scheduled.reminder.sound,
+                    configured_default.as_deref(),
+                    &mut None,
+                )?;
                 Ok(ReminderView {
                     scheduled,
                     effective_sound,
@@ -364,6 +412,7 @@ impl ReminderUseCases {
     pub fn reconcile_zone(&self, device_zone: &str) -> AppResult<u32> {
         let target = parse_zone(device_zone)?;
         let configured_default = self.reminders.default_sound_id()?;
+        let mut device = None;
         let mut moved = 0;
 
         for scheduled in self.reminders.active_scheduled(self.clock.now())? {
@@ -378,14 +427,18 @@ impl ReminderUseCases {
             let at = reinterpret(scheduled.occurrence.occurrence_at, origin, target)?;
             let updated = self.reminders.retime(&scheduled, at, device_zone)?;
 
-            let Ok(sound) = resolve_sound(&updated.reminder.sound, configured_default.as_deref())
-            else {
+            let Ok(sound) = effective_sound(
+                self.alarms.as_ref(),
+                &updated.reminder.sound,
+                configured_default.as_deref(),
+                &mut device,
+            ) else {
                 tracing::warn!("a moved reminder names a sound this build does not have");
                 continue;
             };
             // Re-arming replaces the alarm under the same request code, so the
             // old instant is not left behind to fire as well.
-            match self.alarms.schedule(&alarm_from(&updated, sound)) {
+            match self.alarms.schedule(&alarm_from(&updated, &sound)) {
                 Ok(_) => moved += 1,
                 Err(error) => tracing::warn!(%error, "a moved reminder could not be re-armed"),
             }
@@ -399,16 +452,91 @@ impl ReminderUseCases {
 
     /// Returns sound choices and the concrete global default.
     ///
+    /// The bundled presets always come back; the device's own sounds are added
+    /// when the plugin answers. A plugin that cannot be reached must not take
+    /// the whole picker down, so its failure is logged and the presets stand
+    /// alone.
+    ///
     /// # Errors
-    /// Fails when the stored default is not in the bundled catalog.
+    /// Fails when the stored default is a bare id that is not in the bundled
+    /// catalog.
     pub fn sound_catalog(&self) -> AppResult<ReminderSoundCatalog> {
         let configured = self.reminders.default_sound_id()?;
         let default = configured.as_deref().unwrap_or(FALLBACK_SOUND_ID);
-        let preset = resolve_sound(default, None)?;
+        let default_sound_id = resolve_sound(default, None)?.id().to_owned();
+
+        let device = device_sounds_or_empty(self.alarms.as_ref());
+        let mut items: Vec<CatalogSound> = sound_presets()
+            .iter()
+            .map(|preset| CatalogSound {
+                id: preset.id.to_owned(),
+                label: preset.label.to_owned(),
+                kind: SoundKind::Preset,
+            })
+            .collect();
+        items.extend(device.system.into_iter().map(|sound| CatalogSound {
+            id: sound.id,
+            label: sound.label,
+            kind: SoundKind::System,
+        }));
+        items.extend(device.custom.into_iter().map(|sound| CatalogSound {
+            id: sound.id,
+            label: sound.label,
+            kind: SoundKind::Custom,
+        }));
+
         Ok(ReminderSoundCatalog {
-            default_sound_id: preset.id.to_owned(),
-            items: sound_presets().to_vec(),
+            default_sound_id,
+            items,
         })
+    }
+
+    /// Opens the system file picker so the user can import a sound of their
+    /// own. `None` means the user backed out, which is not an error.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    pub fn pick_custom_sound(&self) -> AppResult<Option<SoundOption>> {
+        self.alarms.pick_custom_sound()
+    }
+
+    /// Removes an imported sound file. Only `custom:` ids can go — the system
+    /// catalog and the bundled presets are not the user's to delete.
+    ///
+    /// # Errors
+    /// Fails for an id without the `custom:` prefix, or when the platform call
+    /// itself fails.
+    pub fn delete_custom_sound(&self, sound_id: &str) -> AppResult<()> {
+        if !sound_id.starts_with(CUSTOM_SOUND_PREFIX) {
+            return Err(AppError::Validation(ValidationError::Invalid {
+                field: "soundId",
+            }));
+        }
+        self.alarms.delete_custom_sound(sound_id)
+    }
+
+    /// Plays a sound once so the user can hear what they are choosing.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    pub fn preview_sound(&self, sound_id: &str) -> AppResult<()> {
+        let configured_default = self.reminders.default_sound_id()?;
+        let mut device = None;
+        let sound = effective_sound(
+            self.alarms.as_ref(),
+            sound_id,
+            configured_default.as_deref(),
+            &mut device,
+        )?;
+        self.alarms.preview_sound(&sound.alarm_sound_id)
+    }
+
+    /// Stops whatever preview is playing. Stopping silence succeeds.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    pub fn stop_preview(&self) -> AppResult<()> {
+        self.alarms.stop_preview()
     }
 
     /// The times offered for one-tap picking, as `HH:MM`.
@@ -442,7 +570,7 @@ fn labels(presets: &[time_presets::TimePreset]) -> Vec<String> {
     presets.iter().map(|preset| preset.label()).collect()
 }
 
-pub(super) fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> Alarm {
+pub(super) fn alarm_from(scheduled: &ScheduledReminder, sound: &EffectiveSound) -> Alarm {
     Alarm {
         occurrence_id: scheduled.occurrence.id.to_string(),
         note_id: scheduled.reminder.note_id.to_string(),
@@ -451,11 +579,70 @@ pub(super) fn alarm_from(scheduled: &ScheduledReminder, sound: SoundPreset) -> A
         title: scheduled.reminder.title.clone(),
         body: scheduled.reminder.body.clone(),
         exact: true,
-        sound_id: sound.resource_name.to_owned(),
-        sound_label: sound.label.to_owned(),
+        sound_id: sound.alarm_sound_id.clone(),
+        sound_label: sound.label.clone(),
         vibrate: true,
         snooze_minutes: scheduled.reminder.snooze_minutes,
     }
+}
+
+/// Resolves a stored selection to the sound the alarm will actually make.
+///
+/// A device sound's label comes from the device list, fetched at most once per
+/// operation through `device`; a sound that has since vanished keeps its id and
+/// falls back to a generic label rather than failing — the reminder still has
+/// to fire, and Android falls back to a default tone on its own.
+///
+/// # Errors
+/// Fails when the selection is a bare id that names no bundled preset.
+pub(super) fn effective_sound(
+    alarms: &dyn AlarmClock,
+    selected: &str,
+    configured_default: Option<&str>,
+    device: &mut Option<DeviceSounds>,
+) -> AppResult<EffectiveSound> {
+    match resolve_sound(selected, configured_default)? {
+        ResolvedSound::Preset(preset) => Ok(EffectiveSound {
+            id: preset.id.to_owned(),
+            label: preset.label.to_owned(),
+            alarm_sound_id: preset.resource_name.to_owned(),
+        }),
+        ResolvedSound::Device { id } => {
+            let sounds = device.get_or_insert_with(|| device_sounds_or_empty(alarms));
+            let label = sounds
+                .system
+                .iter()
+                .chain(&sounds.custom)
+                .find(|sound| sound.id == id)
+                .map_or_else(
+                    || device_fallback_label(&id).to_owned(),
+                    |sound| sound.label.clone(),
+                );
+            Ok(EffectiveSound {
+                label,
+                alarm_sound_id: id.clone(),
+                id,
+            })
+        }
+    }
+}
+
+/// The label shown when a device sound is no longer on the device list.
+fn device_fallback_label(id: &str) -> &'static str {
+    if id.starts_with(CUSTOM_SOUND_PREFIX) {
+        CUSTOM_SOUND_FALLBACK_LABEL
+    } else {
+        SYSTEM_SOUND_FALLBACK_LABEL
+    }
+}
+
+/// Reads the device sound list, folding a plugin failure into an empty one so
+/// the caller can carry on with the bundled presets.
+pub(super) fn device_sounds_or_empty(alarms: &dyn AlarmClock) -> DeviceSounds {
+    alarms.device_sounds().unwrap_or_else(|error| {
+        tracing::warn!(%error, "device sounds could not be read; carrying on without them");
+        DeviceSounds::default()
+    })
 }
 
 /// Moves a note to trash and cancels its active reminder as one user action.
@@ -542,7 +729,7 @@ mod tests {
     use crate::infrastructure::sqlite::{
         Database, SqliteNoteRepository, SqliteReminderRepository, SqliteSearchRepository,
     };
-    use crate::platform::{Alarm, AlarmClock, AlarmPermissions};
+    use crate::platform::{Alarm, AlarmClock, AlarmPermissions, DeviceSounds, SoundOption};
 
     struct Fixture {
         notes: NoteUseCases,
@@ -557,6 +744,8 @@ mod tests {
         launch_target: parking_lot::Mutex<Option<String>>,
         notifications_granted: bool,
         exact: bool,
+        device: DeviceSounds,
+        deleted_sounds: parking_lot::Mutex<Vec<String>>,
     }
 
     impl AlarmClock for FakeAlarmClock {
@@ -589,6 +778,15 @@ mod tests {
         fn request_notification_permission(&self) -> AppResult<bool> {
             Ok(self.notifications_granted)
         }
+
+        fn device_sounds(&self) -> AppResult<DeviceSounds> {
+            Ok(self.device.clone())
+        }
+
+        fn delete_custom_sound(&self, id: &str) -> AppResult<()> {
+            self.deleted_sounds.lock().push(id.to_owned());
+            Ok(())
+        }
     }
 
     struct ReminderFixture {
@@ -599,6 +797,14 @@ mod tests {
     }
 
     fn reminder_fixture(notifications_granted: bool, exact: bool) -> ReminderFixture {
+        reminder_fixture_with_sounds(notifications_granted, exact, DeviceSounds::default())
+    }
+
+    fn reminder_fixture_with_sounds(
+        notifications_granted: bool,
+        exact: bool,
+        device: DeviceSounds,
+    ) -> ReminderFixture {
         let clock: SharedClock = Arc::new(FixedClock::new(Timestamp::from_millis(1_000)));
         let database = Arc::new(Database::open_in_memory(1_000).expect("opens"));
         let note_repository = Arc::new(SqliteNoteRepository::new(
@@ -614,6 +820,7 @@ mod tests {
         let alarms = Arc::new(FakeAlarmClock {
             notifications_granted,
             exact,
+            device,
             ..FakeAlarmClock::default()
         });
         let reminder_repository =
@@ -897,6 +1104,129 @@ mod tests {
             .list_for_note(&fixture.note_id.to_string())
             .expect("reads")
             .is_empty());
+    }
+
+    fn device_sounds_fixture() -> DeviceSounds {
+        DeviceSounds {
+            system: vec![SoundOption {
+                id: "system:content://media/1".into(),
+                label: "Chime".into(),
+            }],
+            custom: vec![SoundOption {
+                id: "custom:beep.ogg".into(),
+                label: "beep".into(),
+            }],
+        }
+    }
+
+    #[test]
+    fn a_device_sound_keeps_its_id_and_takes_its_label_from_the_device_list() {
+        let fixture = reminder_fixture_with_sounds(true, true, device_sounds_fixture());
+
+        let stored = fixture
+            .reminders
+            .upsert_for_note(UpsertReminderRequest {
+                sound: "system:content://media/1".into(),
+                ..valid_reminder_request(fixture.note_id)
+            })
+            .expect("schedules");
+
+        assert_eq!(stored.effective_sound.id, "system:content://media/1");
+        assert_eq!(stored.effective_sound.label, "Chime");
+        let armed = fixture.alarms.scheduled.lock();
+        assert_eq!(armed[0].sound_id, "system:content://media/1");
+        assert_eq!(armed[0].sound_label, "Chime");
+    }
+
+    #[test]
+    fn a_vanished_device_sound_falls_back_to_a_generic_label_but_keeps_the_id() {
+        // The device list is empty, so neither id can be looked up.
+        let fixture = reminder_fixture(true, true);
+
+        let custom = fixture
+            .reminders
+            .upsert_for_note(UpsertReminderRequest {
+                sound: "custom:gone.ogg".into(),
+                ..valid_reminder_request(fixture.note_id)
+            })
+            .expect("schedules");
+        assert_eq!(custom.effective_sound.id, "custom:gone.ogg");
+        assert_eq!(
+            custom.effective_sound.label,
+            crate::domain::reminders::CUSTOM_SOUND_FALLBACK_LABEL
+        );
+
+        let system = fixture
+            .reminders
+            .upsert_for_note(UpsertReminderRequest {
+                sound: "system:content://media/9".into(),
+                ..valid_reminder_request(fixture.note_id)
+            })
+            .expect("schedules");
+        assert_eq!(
+            system.effective_sound.label,
+            crate::domain::reminders::SYSTEM_SOUND_FALLBACK_LABEL
+        );
+        assert_eq!(
+            fixture.alarms.scheduled.lock().last().expect("armed").sound_id,
+            "system:content://media/9"
+        );
+    }
+
+    #[test]
+    fn the_catalog_lists_presets_then_system_then_custom_sounds() {
+        let fixture = reminder_fixture_with_sounds(true, true, device_sounds_fixture());
+
+        let catalog = fixture.reminders.sound_catalog().expect("reads");
+
+        assert_eq!(catalog.default_sound_id, "death_and_rebirth");
+        let kinds: Vec<SoundKind> = catalog.items.iter().map(|item| item.kind).collect();
+        assert_eq!(
+            kinds,
+            vec![SoundKind::Preset, SoundKind::System, SoundKind::Custom]
+        );
+        assert_eq!(catalog.items[1].id, "system:content://media/1");
+        assert_eq!(catalog.items[2].label, "beep");
+    }
+
+    #[test]
+    fn an_empty_device_leaves_the_catalog_with_presets_only() {
+        let fixture = reminder_fixture(true, true);
+        let catalog = fixture.reminders.sound_catalog().expect("reads");
+        assert_eq!(catalog.items.len(), sound_presets().len());
+        assert!(catalog
+            .items
+            .iter()
+            .all(|item| item.kind == SoundKind::Preset));
+    }
+
+    #[test]
+    fn deleting_a_custom_sound_requires_the_custom_prefix() {
+        let fixture = reminder_fixture(true, true);
+
+        let error = fixture
+            .reminders
+            .delete_custom_sound("system:content://media/1")
+            .expect_err("only custom sounds can go");
+        assert_eq!(error.code(), "validation_invalid");
+        assert!(fixture.alarms.deleted_sounds.lock().is_empty());
+
+        fixture
+            .reminders
+            .delete_custom_sound("custom:beep.ogg")
+            .expect("deletes");
+        assert_eq!(
+            fixture.alarms.deleted_sounds.lock().as_slice(),
+            &["custom:beep.ogg".to_owned()]
+        );
+    }
+
+    #[test]
+    fn picking_a_custom_sound_reports_a_backed_out_picker_as_nothing() {
+        // The default trait implementation stands in for a platform without a
+        // picker: no error, just nothing chosen.
+        let fixture = reminder_fixture(true, true);
+        assert_eq!(fixture.reminders.pick_custom_sound().expect("asks"), None);
     }
 
     #[test]

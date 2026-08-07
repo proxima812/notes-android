@@ -75,11 +75,11 @@ export function ThemeSwitcher(): React.JSX.Element {
         <Palette className="size-5" />
         {/* The current theme is stated by a dot rather than by painting the whole
             button: a full gradient made this control the loudest thing on the
-            screen and left no readable colour for the icon on the light presets. */}
+            screen and left no readable colour for the icon on the pale presets. */}
         <span
           aria-hidden="true"
           style={{ backgroundImage: current?.swatch }}
-          // The outline is what keeps the near-white Фарфор swatch from
+          // The outline is what keeps the near-black Обсидиан swatch from
           // disappearing into the button it sits on.
           className="border-border-subtle absolute top-1.5 right-1.5 size-2.5 rounded-full border"
         />

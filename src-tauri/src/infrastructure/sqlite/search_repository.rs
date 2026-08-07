@@ -46,13 +46,6 @@ fn note_conditions(query: &SearchQuery) -> (String, Vec<Value>) {
         conditions.push("n.note_type = ?".to_owned());
         params.push(Value::Text(note_type.as_str().to_owned()));
     }
-    if let Some(folder_id) = query.folder_id {
-        conditions.push(
-            "EXISTS (SELECT 1 FROM note_folders nf WHERE nf.note_id = n.id AND nf.folder_id = ?)"
-                .to_owned(),
-        );
-        params.push(Value::Text(folder_id.to_string()));
-    }
     if let Some(tag_id) = query.tag_id {
         conditions.push(
             "EXISTS (SELECT 1 FROM note_tags nt WHERE nt.note_id = n.id AND nt.tag_id = ?)"

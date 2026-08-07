@@ -1,12 +1,12 @@
-//! Filing notes: folders and tags.
+//! Filing notes: tags.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 use std::sync::Arc;
 
 use crate::domain::clock::SharedClock;
-use crate::domain::ids::{FolderId, NoteId, TagId};
-use crate::domain::organisation::{Folder, LabelName, OrganisationRepository, Tag};
+use crate::domain::ids::{NoteId, TagId};
+use crate::domain::organisation::{LabelName, OrganisationRepository, Tag};
 use crate::error::AppResult;
 
 /// Keeps the first of each id and drops the repeats.
@@ -67,6 +67,17 @@ impl OrganisationUseCases {
         self.organisation.tags_of_note(NoteId::parse(note_id)?)
     }
 
+    /// The tags of a whole list of notes, for the chips under each card.
+    ///
+    /// Takes parsed ids rather than strings: the caller is the note list, which
+    /// already holds notes the core itself handed it.
+    ///
+    /// # Errors
+    /// Fails on a database error.
+    pub fn tags_of_notes(&self, notes: &[NoteId]) -> AppResult<HashMap<NoteId, Vec<Tag>>> {
+        self.organisation.tags_of_notes(notes)
+    }
+
     /// Replaces the whole set of tags on a note.
     ///
     /// The set is sent rather than a change to it: adding and removing are the
@@ -89,50 +100,6 @@ impl OrganisationUseCases {
         self.organisation.tags_of_note(note_id)
     }
 
-    /// # Errors
-    /// Fails on a database error.
-    pub fn folders(&self) -> AppResult<Vec<Folder>> {
-        self.organisation.folders()
-    }
-
-    /// # Errors
-    /// Fails on validation or a database error.
-    pub fn create_folder(&self, name: &str) -> AppResult<Folder> {
-        let name = LabelName::new(name, "name")?;
-        self.organisation.create_folder(&name, self.clock.now())
-    }
-
-    /// # Errors
-    /// Fails for a malformed identifier, for a folder that does not exist, or
-    /// on a database error.
-    pub fn delete_folder(&self, id: &str) -> AppResult<()> {
-        self.organisation.delete_folder(FolderId::parse(id)?)
-    }
-
-    /// # Errors
-    /// Fails for a malformed identifier or on a database error.
-    pub fn folders_of_note(&self, note_id: &str) -> AppResult<Vec<Folder>> {
-        self.organisation.folders_of_note(NoteId::parse(note_id)?)
-    }
-
-    /// Replaces the whole set of folders a note is filed under, on the same
-    /// terms as [`Self::set_note_tags`].
-    ///
-    /// # Errors
-    /// Fails for a malformed identifier, for a folder that does not exist, or
-    /// on a database error.
-    pub fn set_note_folders(&self, note_id: &str, folders: &[String]) -> AppResult<Vec<Folder>> {
-        let note_id = NoteId::parse(note_id)?;
-        let ids = as_set(
-            folders
-                .iter()
-                .map(|id| FolderId::parse(id))
-                .collect::<AppResult<Vec<_>>>()?,
-        );
-        self.organisation
-            .set_note_folders(note_id, &ids, self.clock.now())?;
-        self.organisation.folders_of_note(note_id)
-    }
 }
 
 #[cfg(test)]
@@ -160,9 +127,7 @@ mod tests {
     #[derive(Default)]
     struct FakeOrganisation {
         tags: Mutex<Vec<Tag>>,
-        folders: Mutex<Vec<Folder>>,
         note_tags: Mutex<Vec<(NoteId, TagId)>>,
-        note_folders: Mutex<Vec<(NoteId, FolderId)>>,
         /// A stand-in for the `notes` table, so a test can say what deleting a
         /// label did *not* do.
         notes: Mutex<Vec<(NoteId, String)>>,
@@ -230,6 +195,18 @@ mod tests {
                 .collect())
         }
 
+        fn tags_of_notes(&self, notes: &[NoteId]) -> AppResult<HashMap<NoteId, Vec<Tag>>> {
+            self.calls.lock().push("tags_of_notes");
+            let mut by_note = HashMap::new();
+            for note_id in notes {
+                let tags = self.tags_of_note(*note_id)?;
+                if !tags.is_empty() {
+                    by_note.insert(*note_id, tags);
+                }
+            }
+            Ok(by_note)
+        }
+
         fn set_note_tags(&self, note_id: NoteId, tags: &[TagId], _now: Timestamp) -> AppResult<()> {
             self.calls.lock().push("set_note_tags");
             let known = self.tags.lock();
@@ -246,70 +223,6 @@ mod tests {
             Ok(())
         }
 
-        fn folders(&self) -> AppResult<Vec<Folder>> {
-            self.calls.lock().push("folders");
-            Ok(self.folders.lock().clone())
-        }
-
-        fn create_folder(&self, name: &LabelName, _now: Timestamp) -> AppResult<Folder> {
-            self.calls.lock().push("create_folder");
-            let folder = Folder {
-                id: FolderId::new(),
-                name: name.display().to_owned(),
-                note_count: 0,
-            };
-            self.folders.lock().push(folder.clone());
-            Ok(folder)
-        }
-
-        fn delete_folder(&self, id: FolderId) -> AppResult<()> {
-            self.calls.lock().push("delete_folder");
-            let mut folders = self.folders.lock();
-            let before = folders.len();
-            folders.retain(|folder| folder.id != id);
-            if folders.len() == before {
-                return Err(not_found("folder", &id));
-            }
-            self.note_folders.lock().retain(|(_, folder)| *folder != id);
-            Ok(())
-        }
-
-        fn folders_of_note(&self, note_id: NoteId) -> AppResult<Vec<Folder>> {
-            self.calls.lock().push("folders_of_note");
-            let links = self.note_folders.lock();
-            Ok(self
-                .folders
-                .lock()
-                .iter()
-                .filter(|folder| {
-                    links
-                        .iter()
-                        .any(|(note, id)| *note == note_id && *id == folder.id)
-                })
-                .cloned()
-                .collect())
-        }
-
-        fn set_note_folders(
-            &self,
-            note_id: NoteId,
-            folders: &[FolderId],
-            _now: Timestamp,
-        ) -> AppResult<()> {
-            self.calls.lock().push("set_note_folders");
-            let known = self.folders.lock();
-            if let Some(missing) = folders
-                .iter()
-                .find(|id| !known.iter().any(|folder| folder.id == **id))
-            {
-                return Err(not_found("folder", missing));
-            }
-            drop(known);
-            let mut links = self.note_folders.lock();
-            links.retain(|(note, _)| *note != note_id);
-            links.extend(folders.iter().map(|folder| (note_id, *folder)));
-            Ok(())
-        }
     }
 
     fn fixture() -> (OrganisationUseCases, Arc<FakeOrganisation>) {
@@ -359,23 +272,6 @@ mod tests {
             .expect("clears");
 
         assert!(remaining.is_empty());
-    }
-
-    #[test]
-    fn setting_the_folders_of_a_note_replaces_rather_than_adds() {
-        let (organisation, repository) = fixture();
-        let note = repository.add_note("Заметка");
-        let projects = organisation.create_folder("Проекты").expect("creates");
-        let archive = organisation.create_folder("Архив").expect("creates");
-
-        organisation
-            .set_note_folders(&note.to_string(), &[projects.id.to_string()])
-            .expect("files");
-        let remaining = organisation
-            .set_note_folders(&note.to_string(), &[archive.id.to_string()])
-            .expect("refiles");
-
-        assert_eq!(remaining, vec![archive]);
     }
 
     #[test]
@@ -429,32 +325,6 @@ mod tests {
     }
 
     #[test]
-    fn deleting_a_folder_leaves_the_notes_that_were_in_it() {
-        let (organisation, repository) = fixture();
-        let note = repository.add_note("Заметка");
-        let projects = organisation.create_folder("Проекты").expect("creates");
-        organisation
-            .set_note_folders(&note.to_string(), &[projects.id.to_string()])
-            .expect("files");
-        let notes_before = repository.notes.lock().clone();
-
-        organisation
-            .delete_folder(&projects.id.to_string())
-            .expect("deletes");
-
-        assert!(organisation.folders().expect("reads").is_empty());
-        assert!(organisation
-            .folders_of_note(&note.to_string())
-            .expect("reads")
-            .is_empty());
-        assert_eq!(
-            *repository.notes.lock(),
-            notes_before,
-            "emptying a drawer is not the same as throwing away what was in it"
-        );
-    }
-
-    #[test]
     fn a_tag_id_that_is_not_an_identifier_never_reaches_the_repository() {
         let (organisation, repository) = fixture();
 
@@ -478,13 +348,7 @@ mod tests {
                 .tags_of_note("note-1")
                 .expect_err("must refuse"),
             organisation
-                .folders_of_note("note-1")
-                .expect_err("must refuse"),
-            organisation
                 .set_note_tags("note-1", &[])
-                .expect_err("must refuse"),
-            organisation
-                .set_note_folders("note-1", &[])
                 .expect_err("must refuse"),
         ] {
             assert_eq!(error.code(), "validation_invalid");
@@ -521,19 +385,6 @@ mod tests {
     }
 
     #[test]
-    fn one_malformed_folder_id_leaves_the_whole_set_as_it_was() {
-        let (organisation, repository) = fixture();
-        let note = repository.add_note("Заметка");
-
-        let error = organisation
-            .set_note_folders(&note.to_string(), &["not-a-folder".to_owned()])
-            .expect_err("must refuse");
-
-        assert_eq!(error.code(), "validation_invalid");
-        assert!(!repository.calls.lock().contains(&"set_note_folders"));
-    }
-
-    #[test]
     fn deleting_a_tag_that_is_not_there_is_reported_rather_than_passed_over() {
         let (organisation, _repository) = fixture();
         let absent = TagId::new();
@@ -547,19 +398,6 @@ mod tests {
             error.to_string().contains(&absent.to_string()),
             "the error names the id that was missed"
         );
-    }
-
-    #[test]
-    fn deleting_a_folder_that_is_not_there_is_reported_rather_than_passed_over() {
-        let (organisation, _repository) = fixture();
-        let absent = FolderId::new();
-
-        let error = organisation
-            .delete_folder(&absent.to_string())
-            .expect_err("nothing to delete");
-
-        assert_eq!(error.code(), "not_found");
-        assert!(error.to_string().contains(&absent.to_string()));
     }
 
     #[test]
@@ -607,44 +445,6 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_that_does_not_exist_leaves_the_whole_set_as_it_was() {
-        let (organisation, repository) = fixture();
-        let note = repository.add_note("Заметка");
-        let projects = organisation.create_folder("Проекты").expect("creates");
-        organisation
-            .set_note_folders(&note.to_string(), &[projects.id.to_string()])
-            .expect("files");
-        let absent = FolderId::new();
-
-        let error = organisation
-            .set_note_folders(&note.to_string(), &[absent.to_string()])
-            .expect_err("must refuse");
-
-        assert_eq!(error.code(), "not_found");
-        assert!(error.to_string().contains(&absent.to_string()));
-        assert_eq!(
-            organisation
-                .folders_of_note(&note.to_string())
-                .expect("reads"),
-            vec![projects]
-        );
-    }
-
-    #[test]
-    fn a_folder_without_a_name_is_refused() {
-        let (organisation, repository) = fixture();
-
-        let error = organisation.create_folder("   ").expect_err("must refuse");
-
-        assert_eq!(error.code(), "validation_required");
-        assert!(organisation.folders().expect("reads").is_empty());
-        assert!(
-            !repository.calls.lock().contains(&"create_folder"),
-            "the name is refused here, not by whoever stores it"
-        );
-    }
-
-    #[test]
     fn a_tag_without_a_name_is_refused() {
         let (organisation, repository) = fixture();
 
@@ -660,12 +460,9 @@ mod tests {
         let (organisation, repository) = fixture();
         let long = "я".repeat(MAX_LABEL + 1);
 
-        for error in [
-            organisation.ensure_tag(&long).expect_err("must refuse"),
-            organisation.create_folder(&long).expect_err("must refuse"),
-        ] {
-            assert_eq!(error.code(), "validation_too_long");
-        }
+        let error = organisation.ensure_tag(&long).expect_err("must refuse");
+
+        assert_eq!(error.code(), "validation_too_long");
         assert!(repository.calls.lock().is_empty());
     }
 
@@ -688,23 +485,6 @@ mod tests {
             1,
             "the repository is handed a set, so it never has to fold one itself"
         );
-    }
-
-    #[test]
-    fn a_folder_named_twice_in_a_set_is_filed_once() {
-        let (organisation, repository) = fixture();
-        let note = repository.add_note("Заметка");
-        let projects = organisation.create_folder("Проекты").expect("creates");
-
-        let on_note = organisation
-            .set_note_folders(
-                &note.to_string(),
-                &[projects.id.to_string(), projects.id.to_string()],
-            )
-            .expect("a repeat is not an error");
-
-        assert_eq!(on_note, vec![projects]);
-        assert_eq!(repository.note_folders.lock().len(), 1);
     }
 
     #[test]

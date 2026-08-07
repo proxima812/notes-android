@@ -14,7 +14,24 @@ import android.net.Uri
  * specific minute is worth an interruption.
  */
 internal object ReminderNotifications {
-    private val SOUND_ID = Regex("^[a-z0-9_]+$")
+
+    /**
+     * The URI the system will play for a sound id, whatever kind it is.
+     *
+     * The same resolution serves the channel and the in-app preview, so what
+     * the user hears when trying a sound is what the notification plays.
+     */
+    fun soundUri(context: Context, soundId: String): Uri =
+        when (val source = SoundIds.parse(soundId)) {
+            is SoundSource.System -> Uri.parse(source.uri)
+            is SoundSource.Custom -> ReminderSoundProvider.uriFor(source.fileName)
+            is SoundSource.Preset -> {
+                val resourceId = context.resources
+                    .getIdentifier(source.name, "raw", context.packageName)
+                require(resourceId != 0) { "звук ${source.name} не найден" }
+                Uri.parse("android.resource://${context.packageName}/$resourceId")
+            }
+        }
 
     fun ensureChannel(
         context: Context,
@@ -22,18 +39,15 @@ internal object ReminderNotifications {
         soundLabel: String,
         vibrate: Boolean,
     ): String {
-        require(SOUND_ID.matches(soundId)) { "некорректный ID звука" }
-        val resourceId = context.resources.getIdentifier(soundId, "raw", context.packageName)
-        require(resourceId != 0) { "звук $soundId не найден" }
+        val uri = soundUri(context, soundId)
 
-        val channelId = "reminders_sound_${soundId}_v1"
+        val channelId = SoundIds.channelId(soundId)
         val manager = context.getSystemService(NotificationManager::class.java)
             ?: error("NotificationManager недоступен")
         if (manager.getNotificationChannel(channelId) != null) {
             return channelId
         }
 
-        val uri = Uri.parse("android.resource://${context.packageName}/$resourceId")
         val attributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)

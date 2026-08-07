@@ -76,6 +76,8 @@ export const noteSummarySchema = z.object({
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
   deletedAt: z.number().int().nullable(),
+  /** Names only: a card shows its tags, it does not let you pick by them. */
+  tags: z.array(z.string()),
 });
 
 export type NoteSummary = z.infer<typeof noteSummarySchema>;
@@ -125,7 +127,6 @@ export type NoteSort = z.infer<typeof noteSortSchema>;
 export interface ListNotesRequest {
   readonly scope?: NoteScope;
   readonly sort?: NoteSort;
-  readonly folderId?: string | undefined;
   readonly tagId?: string | undefined;
   readonly noteType?: NoteType;
   readonly pinnedOnly?: boolean;

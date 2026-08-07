@@ -2,13 +2,13 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { reminderSchema } from "../api";
+import { reminderSchema, type ReminderSoundCatalog } from "../api";
 import { ReminderPanel, localDateTimeToMillis } from "./ReminderPanel";
 
-const sounds = {
+const sounds: ReminderSoundCatalog = {
   defaultSoundId: "death_and_rebirth",
-  items: [{ id: "death_and_rebirth", label: "Death & Rebirth" }],
-} as const;
+  items: [{ id: "death_and_rebirth", label: "Death & Rebirth", kind: "preset" }],
+};
 
 const presets = ["07:00", "09:00", "12:00", "16:00", "18:00", "23:00"] as const;
 
@@ -89,15 +89,53 @@ describe("ReminderPanel", () => {
     );
 
     expect(screen.getByDisplayValue("Выпить воду")).toBeInTheDocument();
-    expect(
-      screen.getByRole("radio", { name: /^Death & Rebirth$/ }),
-    ).toBeChecked();
+    expect(screen.getByRole("button", { name: "Звук" })).toHaveTextContent(
+      "Death & Rebirth",
+    );
     expect(screen.getByText(/Android может доставить/)).toBeInTheDocument();
 
     await userEvent.click(
       screen.getByRole("button", { name: "Удалить напоминание «Выпить воду»" }),
     );
     expect(onRemove).toHaveBeenCalledWith(initial.id);
+  });
+
+  it("labels a sound the catalog no longer lists as unavailable", () => {
+    const initial = reminderSchema.parse({
+      id: "0193b3b2-4d3c-7c9a-8f2e-1a2b3c4d5e6f",
+      noteId: "0193b3b2-4d3c-7c9a-8f2e-1a2b3c4d5e70",
+      occurrenceId: "0193b3b2-4d3c-7c9a-8f2e-1a2b3c4d5e71",
+      title: "Выпить воду",
+      body: "",
+      scheduledAt: new Date("2030-01-02T03:04:00").getTime(),
+      timezone: "Asia/Almaty",
+      sound: "system:content://media/internal/audio/media/999",
+      effectiveSoundId: "death_and_rebirth",
+      effectiveSoundLabel: "Death & Rebirth",
+      isExact: true,
+      recurrence: null,
+    });
+
+    render(
+      <ReminderPanel
+        initial={initial}
+        sounds={sounds}
+        noteTitle="Заметка"
+        busy={false}
+        error={null}
+        presets={presets}
+        existing={[initial]}
+        onEdit={vi.fn()}
+        onRemove={vi.fn()}
+        onSavePresets={vi.fn()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "Звук" })).toHaveTextContent(
+      "Звук недоступен",
+    );
   });
 
   it("fills the time from a preset and saves that time", async () => {

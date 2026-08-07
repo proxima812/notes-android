@@ -14,7 +14,6 @@ if (container === null) {
 
 // Before the first paint, not in an effect: a saved theme applied after React
 // mounts would show one frame of the default accent on every cold start.
-document.documentElement.dataset["theme"] = "dark";
 applyTheme(loadTheme());
 applyLanguage(loadLanguage());
 

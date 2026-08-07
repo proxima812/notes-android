@@ -17,21 +17,25 @@ export interface AppTheme {
   readonly swatch: string;
 }
 
-export const APP_THEME_IDS = [
-  "mint",
-  "indigo",
-  "amethyst",
-  "amber",
-  "obsidian",
-  "porcelain",
-] as const;
+export const APP_THEME_IDS = ["obsidian", "mint", "indigo", "amethyst", "amber"] as const;
 
 export type AppThemeId = (typeof APP_THEME_IDS)[number];
 
-/** The launcher icon's mint, so the app opens in the colour it was tapped in. */
-export const DEFAULT_THEME_ID: AppThemeId = "mint";
+/**
+ * What an app that was never given a theme opens in.
+ *
+ * Every theme is dark — the app does not follow the phone's light mode, because
+ * there is no longer a light palette to follow it with. Обсидиан leads because
+ * true black is what the OLED panel these notes are read on wants.
+ */
+export const DEFAULT_THEME_ID: AppThemeId = "obsidian";
 
 export const APP_THEMES: readonly AppTheme[] = [
+  {
+    id: "obsidian",
+    labelKey: "theme.obsidian",
+    swatch: "linear-gradient(135deg, oklch(45% 0 90) 0%, oklch(0% 0 0) 100%)",
+  },
   {
     id: "mint",
     labelKey: "theme.mint",
@@ -52,16 +56,6 @@ export const APP_THEMES: readonly AppTheme[] = [
     labelKey: "theme.amber",
     swatch: "linear-gradient(135deg, oklch(88% 0.14 98) 0%, oklch(76% 0.16 58) 100%)",
   },
-  {
-    id: "obsidian",
-    labelKey: "theme.obsidian",
-    swatch: "linear-gradient(135deg, oklch(45% 0 90) 0%, oklch(0% 0 0) 100%)",
-  },
-  {
-    id: "porcelain",
-    labelKey: "theme.porcelain",
-    swatch: "linear-gradient(135deg, oklch(100% 0 90) 0%, oklch(88% 0.004 286) 100%)",
-  },
 ];
 
 const STORAGE_KEY = "xkeeps.theme";
@@ -71,17 +65,24 @@ export function isThemeId(value: string | null): value is AppThemeId {
 }
 
 /**
+ * The theme the user picked, or `null` if they never picked one.
+ *
  * Reading storage is wrapped because a WebView with site data disabled throws
  * here rather than returning null, and losing the saved theme must never take
  * the whole app down with it.
  */
-export function loadTheme(): AppThemeId {
+export function loadStoredTheme(): AppThemeId | null {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    return isThemeId(stored) ? stored : DEFAULT_THEME_ID;
+    return isThemeId(stored) ? stored : null;
   } catch {
-    return DEFAULT_THEME_ID;
+    return null;
   }
+}
+
+/** What to paint right now: the chosen theme, else the default. */
+export function loadTheme(): AppThemeId {
+  return loadStoredTheme() ?? DEFAULT_THEME_ID;
 }
 
 export function saveTheme(id: AppThemeId): void {

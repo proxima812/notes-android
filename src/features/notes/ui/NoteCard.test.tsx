@@ -18,6 +18,7 @@ const note: NoteSummary = {
   isFavorite: false,
   wordCount: 3,
   deletedAt: null,
+  tags: [],
 };
 
 beforeAll(() => {
@@ -91,5 +92,39 @@ describe("NoteCard swipe", () => {
     const { onOpen } = setup();
     fireEvent.click(screen.getByRole("button", { name: /Открыть заметку/ }));
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("NoteCard tags", () => {
+  it("shows the tags of the note under its preview", () => {
+    render(
+      <ul>
+        <NoteCard
+          note={{ ...note, tags: ["работа", "дом"] }}
+          busy={false}
+          onOpen={vi.fn()}
+          onArchive={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </ul>,
+    );
+
+    expect(screen.getByText("#работа #дом")).toBeInTheDocument();
+  });
+
+  it("shows no tag line at all when the note wears none", () => {
+    render(
+      <ul>
+        <NoteCard
+          note={note}
+          busy={false}
+          onOpen={vi.fn()}
+          onArchive={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </ul>,
+    );
+
+    expect(screen.queryByText(/#/)).not.toBeInTheDocument();
   });
 });

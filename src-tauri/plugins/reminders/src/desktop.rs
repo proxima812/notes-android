@@ -2,8 +2,8 @@ use serde::de::DeserializeOwned;
 use tauri::{plugin::PluginApi, AppHandle, Runtime};
 
 use crate::models::{
-    CancelAllResponse, CancelRequest, LaunchTarget, PermissionRequestResponse, ReminderPermissions,
-    ScheduleRequest, ScheduleResponse,
+    CancelAllResponse, CancelRequest, DeviceSounds, LaunchTarget, PermissionRequestResponse,
+    PickCustomOutcome, ReminderPermissions, ScheduleRequest, ScheduleResponse,
 };
 
 /// The desktop half exists so the crate compiles on the development machine —
@@ -65,5 +65,42 @@ impl<R: Runtime> Reminders<R> {
     /// Always: there is no alarm clock to talk to off-device.
     pub fn request_notification_permission(&self) -> crate::Result<PermissionRequestResponse> {
         Err(crate::Error::Unsupported)
+    }
+
+    /// Off-device the catalog is simply empty. Answering rather than refusing
+    /// keeps the sound list usable on the development machine, where the
+    /// bundled presets still exist.
+    ///
+    /// # Errors
+    /// Never.
+    pub fn list_device_sounds(&self) -> crate::Result<DeviceSounds> {
+        Ok(DeviceSounds::default())
+    }
+
+    /// # Errors
+    /// Always: there is no file picker or sound storage off-device.
+    pub fn pick_custom_sound(&self) -> crate::Result<PickCustomOutcome> {
+        Err(crate::Error::Unsupported)
+    }
+
+    /// # Errors
+    /// Always: there is no sound storage off-device.
+    pub fn delete_custom_sound(&self, _id: String) -> crate::Result<()> {
+        Err(crate::Error::Unsupported)
+    }
+
+    /// # Errors
+    /// Always: there is no player to hand the sound to off-device.
+    pub fn preview_sound(&self, _id: String) -> crate::Result<()> {
+        Err(crate::Error::Unsupported)
+    }
+
+    /// Off-device nothing is ever playing, so stopping it succeeds having done
+    /// nothing — the same shape as [`Self::cancel_all`].
+    ///
+    /// # Errors
+    /// Never.
+    pub fn stop_preview(&self) -> crate::Result<()> {
+        Ok(())
     }
 }

@@ -107,10 +107,7 @@ impl AppState {
                 Arc::clone(&clock),
             )),
             organisation: Arc::new(OrganisationUseCases::new(
-                Arc::new(SqliteOrganisationRepository::new(
-                    Arc::clone(&database),
-                    Arc::clone(&clock),
-                )),
+                Arc::new(SqliteOrganisationRepository::new(Arc::clone(&database))),
                 Arc::clone(&clock),
             )),
             app_icons: Arc::new(AppIconUseCases::new(icons, settings)),

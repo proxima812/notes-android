@@ -45,9 +45,17 @@ const brandedOccurrenceId = z
     }
   });
 
+export const reminderSoundKindSchema = z.enum(["preset", "system", "custom"]);
+
+/**
+ * One pickable sound. Preset ids are bare (`death_and_rebirth`); device and
+ * user sounds carry their origin in the id itself (`system:<uri>`,
+ * `custom:<file>`), which is the exact string stored on a reminder.
+ */
 export const reminderSoundSchema = z.object({
-  id: z.string().regex(/^[a-z0-9_]+$/),
+  id: z.string().min(1),
   label: z.string().min(1),
+  kind: reminderSoundKindSchema,
 });
 
 export const reminderSoundCatalogSchema = z.object({
@@ -97,6 +105,7 @@ export const reminderSchema = z.object({
 
 export type Reminder = z.infer<typeof reminderSchema>;
 export type ReminderSound = z.infer<typeof reminderSoundSchema>;
+export type ReminderSoundKind = z.infer<typeof reminderSoundKindSchema>;
 export type ReminderSoundCatalog = z.infer<typeof reminderSoundCatalogSchema>;
 
 export interface UpsertReminderRequest {
@@ -169,6 +178,30 @@ export async function topUpReminders(): Promise<number> {
 
 export async function listReminderSounds(): Promise<ReminderSoundCatalog> {
   return callCommand("reminder_sounds_list", reminderSoundCatalogSchema);
+}
+
+/**
+ * Opens the native file picker for a sound of the user's own.
+ *
+ * Answers the new catalog entry, or `null` when the user backed out of the
+ * picker. The core trims anything longer than ten seconds itself. On desktop
+ * there is no picker and the core answers with an `unsupported` error instead.
+ */
+export async function pickCustomReminderSound(): Promise<ReminderSound | null> {
+  return callCommand("reminder_sound_pick_custom", reminderSoundSchema.nullable());
+}
+
+export async function deleteCustomReminderSound(soundId: string): Promise<null> {
+  return callCommand("reminder_sound_delete_custom", z.null(), { soundId });
+}
+
+/** Plays a sound once so it can be judged before it is chosen. */
+export async function previewReminderSound(soundId: string): Promise<null> {
+  return callCommand("reminder_sound_preview", z.null(), { soundId });
+}
+
+export async function stopReminderSoundPreview(): Promise<null> {
+  return callCommand("reminder_sound_preview_stop", z.null());
 }
 
 /**

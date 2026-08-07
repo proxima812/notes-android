@@ -99,6 +99,18 @@ export function NoteCard({
               {note.preview}
             </p>
           )}
+          {/* Under the preview and smaller than it: on a card the tags say
+              where the note belongs, which is worth less room than what it
+              says. One line — the rest are counted rather than wrapped. */}
+          {note.tags.length > 0 && (
+            <p
+              className={`mt-2 truncate text-xs ${
+                gradient === null ? "text-content-muted" : "note-ink-muted"
+              }`}
+            >
+              {note.tags.map((tag) => `#${tag}`).join(" ")}
+            </p>
+          )}
         </button>
 
         <button

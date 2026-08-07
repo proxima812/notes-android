@@ -35,6 +35,23 @@ pub struct AlarmPermissions {
     pub exact_allowed: bool,
 }
 
+/// One selectable notification sound as the device reports it.
+///
+/// The id carries its origin as a prefix — `system:<uri>` for a ringtone the
+/// OS ships, `custom:<fileName>` for a file the user imported.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoundOption {
+    pub id: String,
+    pub label: String,
+}
+
+/// Every sound the device offers beyond the bundled presets.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DeviceSounds {
+    pub system: Vec<SoundOption>,
+    pub custom: Vec<SoundOption>,
+}
+
 pub trait AlarmClock: Send + Sync {
     /// Arms the alarm and reports whether it ended up exact.
     ///
@@ -74,4 +91,49 @@ pub trait AlarmClock: Send + Sync {
     /// # Errors
     /// Fails when the platform call itself fails.
     fn request_notification_permission(&self) -> AppResult<bool>;
+
+    /// The sounds the device offers beyond the bundled presets.
+    ///
+    /// Defaulted to an empty catalog so a platform — or a test double — that
+    /// knows nothing about device sounds still satisfies the trait.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    fn device_sounds(&self) -> AppResult<DeviceSounds> {
+        Ok(DeviceSounds::default())
+    }
+
+    /// Opens the system file picker so the user can import a sound of their
+    /// own. `None` means the user backed out, which is not an error.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    fn pick_custom_sound(&self) -> AppResult<Option<SoundOption>> {
+        Ok(None)
+    }
+
+    /// Removes an imported sound file. Removing one that is already gone
+    /// succeeds.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    fn delete_custom_sound(&self, _id: &str) -> AppResult<()> {
+        Ok(())
+    }
+
+    /// Plays a sound once so the user can hear what they are choosing.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    fn preview_sound(&self, _id: &str) -> AppResult<()> {
+        Ok(())
+    }
+
+    /// Stops whatever preview is playing. Stopping silence succeeds.
+    ///
+    /// # Errors
+    /// Fails when the platform call itself fails.
+    fn stop_preview(&self) -> AppResult<()> {
+        Ok(())
+    }
 }

@@ -5,8 +5,9 @@ use tauri::{
 };
 
 use crate::models::{
-    CancelAllResponse, CancelRequest, Empty, LaunchTarget, PermissionRequestResponse,
-    ReminderPermissions, RequestPermissionArgs, ScheduleRequest, ScheduleResponse,
+    CancelAllResponse, CancelRequest, DeviceSounds, Empty, LaunchTarget, PermissionRequestResponse,
+    PickCustomOutcome, ReminderPermissions, RequestPermissionArgs, ScheduleRequest,
+    ScheduleResponse, SoundIdArgs,
 };
 
 /// Alias declared on the Kotlin plugin for `POST_NOTIFICATIONS`.
@@ -78,6 +79,60 @@ impl<R: Runtime> Reminders<R> {
     pub fn permissions(&self) -> crate::Result<ReminderPermissions> {
         self.0
             .run_mobile_plugin("permissionState", ())
+            .map_err(Into::into)
+    }
+
+    /// Lists the sounds the device offers beyond the bundled presets.
+    ///
+    /// # Errors
+    /// Fails when the Kotlin side cannot be reached.
+    pub fn list_device_sounds(&self) -> crate::Result<DeviceSounds> {
+        self.0
+            .run_mobile_plugin("listDeviceSounds", ())
+            .map_err(Into::into)
+    }
+
+    /// Opens the system file picker so the user can import a sound of their
+    /// own. Backing out is `completed: false`, not an error.
+    ///
+    /// # Errors
+    /// Fails when the Kotlin side cannot be reached.
+    pub fn pick_custom_sound(&self) -> crate::Result<PickCustomOutcome> {
+        self.0
+            .run_mobile_plugin("pickCustomSound", ())
+            .map_err(Into::into)
+    }
+
+    /// Removes an imported sound file.
+    ///
+    /// # Errors
+    /// Fails when the Kotlin side cannot be reached.
+    pub fn delete_custom_sound(&self, id: String) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin::<Empty>("deleteCustomSound", SoundIdArgs { id })
+            .map(|_| ())
+            .map_err(Into::into)
+    }
+
+    /// Plays a sound once so the user can hear what they are choosing.
+    ///
+    /// # Errors
+    /// Fails when the Kotlin side cannot be reached.
+    pub fn preview_sound(&self, id: String) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin::<Empty>("previewSound", SoundIdArgs { id })
+            .map(|_| ())
+            .map_err(Into::into)
+    }
+
+    /// Stops whatever preview is playing. Stopping silence succeeds.
+    ///
+    /// # Errors
+    /// Fails when the Kotlin side cannot be reached.
+    pub fn stop_preview(&self) -> crate::Result<()> {
+        self.0
+            .run_mobile_plugin::<Empty>("stopPreview", ())
+            .map(|_| ())
             .map_err(Into::into)
     }
 

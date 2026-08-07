@@ -18,6 +18,16 @@ pub use zones::{parse_zone, reinterpret, resolve};
 pub const DEFAULT_SOUND_SETTING_KEY: &str = "reminders.default_sound";
 pub const FALLBACK_SOUND_ID: &str = "death_and_rebirth";
 
+/// Marks a sound the OS ships: `system:<uri>`.
+pub const SYSTEM_SOUND_PREFIX: &str = "system:";
+/// Marks a file the user imported: `custom:<fileName>`.
+pub const CUSTOM_SOUND_PREFIX: &str = "custom:";
+
+/// Label used when an imported sound is no longer on the device list.
+pub const CUSTOM_SOUND_FALLBACK_LABEL: &str = "Свой звук";
+/// Label used when a system sound is no longer on the device list.
+pub const SYSTEM_SOUND_FALLBACK_LABEL: &str = "Системный звук";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SoundPreset {
     pub id: &'static str,
@@ -36,22 +46,58 @@ pub const fn sound_presets() -> &'static [SoundPreset] {
     SOUND_PRESETS
 }
 
-/// Resolves a stored selection to a concrete bundled preset.
+/// What a stored sound selection turned out to be.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedSound {
+    /// A preset bundled with this build.
+    Preset(SoundPreset),
+    /// A sound the device holds — `system:<uri>` or `custom:<fileName>`. The
+    /// id is passed through as-is; only the device can say whether it still
+    /// exists, so the core does not second-guess it.
+    Device { id: String },
+}
+
+impl ResolvedSound {
+    /// The catalog id this selection stands for.
+    #[must_use]
+    pub fn id(&self) -> &str {
+        match self {
+            Self::Preset(preset) => preset.id,
+            Self::Device { id } => id,
+        }
+    }
+}
+
+/// True for ids that name a device sound rather than a bundled preset.
+#[must_use]
+pub fn is_device_sound_id(id: &str) -> bool {
+    id.starts_with(SYSTEM_SOUND_PREFIX) || id.starts_with(CUSTOM_SOUND_PREFIX)
+}
+
+/// Resolves a stored selection to a concrete sound.
 ///
 /// # Errors
 /// Returns a validation error when either the explicit selection or configured
-/// default does not name a preset shipped by this build.
-pub fn resolve_sound(selected: &str, configured_default: Option<&str>) -> AppResult<SoundPreset> {
+/// default is a bare id that does not name a preset shipped by this build.
+/// Prefixed ids (`system:`/`custom:`) are always accepted as-is.
+pub fn resolve_sound(selected: &str, configured_default: Option<&str>) -> AppResult<ResolvedSound> {
     let concrete = if selected == "default" {
         configured_default.unwrap_or(FALLBACK_SOUND_ID)
     } else {
         selected
     };
 
+    if is_device_sound_id(concrete) {
+        return Ok(ResolvedSound::Device {
+            id: concrete.to_owned(),
+        });
+    }
+
     SOUND_PRESETS
         .iter()
         .copied()
         .find(|preset| preset.id == concrete)
+        .map(ResolvedSound::Preset)
         .ok_or(AppError::Validation(ValidationError::Invalid {
             field: "sound",
         }))
@@ -112,7 +158,10 @@ mod tests {
 
     #[test]
     fn catalog_contains_the_bundled_default() {
-        let preset = resolve_sound("default", None).expect("default resolves");
+        let resolved = resolve_sound("default", None).expect("default resolves");
+        let ResolvedSound::Preset(preset) = resolved else {
+            panic!("the fallback is a bundled preset");
+        };
         assert_eq!(preset.id, "death_and_rebirth");
         assert_eq!(preset.resource_name, "death_and_rebirth");
     }
@@ -125,8 +174,36 @@ mod tests {
 
     #[test]
     fn stored_default_uses_the_configured_catalog_entry() {
-        let preset = resolve_sound("default", Some("death_and_rebirth"))
+        let resolved = resolve_sound("default", Some("death_and_rebirth"))
             .expect("configured default resolves");
+        let ResolvedSound::Preset(preset) = resolved else {
+            panic!("a preset id resolves to a preset");
+        };
         assert_eq!(preset.label, "Death & Rebirth");
+    }
+
+    #[test]
+    fn a_system_sound_id_passes_through_untouched() {
+        let resolved =
+            resolve_sound("system:content://media/1", None).expect("system id resolves");
+        assert_eq!(
+            resolved,
+            ResolvedSound::Device {
+                id: "system:content://media/1".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn a_custom_sound_id_passes_through_untouched() {
+        let resolved = resolve_sound("custom:beep.ogg", None).expect("custom id resolves");
+        assert_eq!(resolved.id(), "custom:beep.ogg");
+    }
+
+    #[test]
+    fn a_configured_device_default_resolves_for_the_default_selection() {
+        let resolved = resolve_sound("default", Some("custom:beep.ogg"))
+            .expect("configured device default resolves");
+        assert_eq!(resolved.id(), "custom:beep.ogg");
     }
 }

@@ -13,7 +13,8 @@ use crate::domain::notes::{
 use crate::domain::search::{SearchEntity, SearchHit, SearchQuery};
 use crate::error::{AppError, AppErrorDto};
 
-use super::use_cases::{ReminderSoundCatalog, ReminderView};
+use super::use_cases::{ReminderSoundCatalog, ReminderView, SoundKind};
+use crate::platform::SoundOption;
 
 /// Uniform envelope for every command.
 ///
@@ -155,6 +156,18 @@ pub struct NoteSummaryDto {
     pub created_at: i64,
     pub updated_at: i64,
     pub deleted_at: Option<i64>,
+    /// Names only, for the line of chips under the card. The list never needs
+    /// their ids: tapping a chip is not a thing a card does.
+    pub tags: Vec<String>,
+}
+
+impl NoteSummaryDto {
+    /// Hangs the note's tags on a summary that was built without them.
+    #[must_use]
+    pub fn with_tags(mut self, tags: Vec<String>) -> Self {
+        self.tags = tags;
+        self
+    }
 }
 
 /// How much body text a list row gets. Enough for two lines on a Pixel 8a.
@@ -188,6 +201,9 @@ impl From<Note> for NoteSummaryDto {
             deleted_at: note
                 .deleted_at
                 .map(crate::domain::clock::Timestamp::as_millis),
+            // Filled in by whoever has the whole page in hand: asking per note
+            // would be one query a row.
+            tags: Vec::new(),
         }
     }
 }
@@ -304,7 +320,6 @@ pub struct ListNotesRequest {
     pub scope: NoteScope,
     #[serde(default)]
     pub sort: NoteSort,
-    pub folder_id: Option<String>,
     pub tag_id: Option<String>,
     pub note_type: Option<NoteType>,
     #[serde(default)]
@@ -323,11 +338,6 @@ impl ListNotesRequest {
     pub fn to_filter(&self) -> Result<NoteFilter, AppError> {
         Ok(NoteFilter {
             scope: self.scope,
-            folder_id: self
-                .folder_id
-                .as_deref()
-                .map(crate::domain::ids::FolderId::parse)
-                .transpose()?,
             tag_id: self
                 .tag_id
                 .as_deref()
@@ -356,7 +366,6 @@ pub struct SearchRequest {
     pub text: String,
     #[serde(default)]
     pub entities: Vec<SearchEntity>,
-    pub folder_id: Option<String>,
     pub tag_id: Option<String>,
     pub note_type: Option<NoteType>,
     pub created_after: Option<i64>,
@@ -382,11 +391,6 @@ impl SearchRequest {
         Ok(SearchQuery {
             text: self.text.clone(),
             entities: self.entities.clone(),
-            folder_id: self
-                .folder_id
-                .as_deref()
-                .map(crate::domain::ids::FolderId::parse)
-                .transpose()?,
             tag_id: self
                 .tag_id
                 .as_deref()
@@ -452,6 +456,28 @@ pub struct ReminderDto {
 pub struct ReminderSoundDto {
     pub id: String,
     pub label: String,
+    /// `"preset"`, `"system"` or `"custom"` — part of the wire contract.
+    pub kind: &'static str,
+}
+
+const fn kind_name(kind: SoundKind) -> &'static str {
+    match kind {
+        SoundKind::Preset => "preset",
+        SoundKind::System => "system",
+        SoundKind::Custom => "custom",
+    }
+}
+
+impl ReminderSoundDto {
+    /// A freshly imported file is by definition a custom sound.
+    #[must_use]
+    pub fn custom(sound: SoundOption) -> Self {
+        Self {
+            id: sound.id,
+            label: sound.label,
+            kind: kind_name(SoundKind::Custom),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -530,30 +556,12 @@ pub struct TagDto {
     pub usage_count: i64,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FolderDto {
-    pub id: String,
-    pub name: String,
-    pub note_count: i64,
-}
-
 impl From<crate::domain::organisation::Tag> for TagDto {
     fn from(tag: crate::domain::organisation::Tag) -> Self {
         Self {
             id: tag.id.to_string(),
             name: tag.name,
             usage_count: tag.usage_count,
-        }
-    }
-}
-
-impl From<crate::domain::organisation::Folder> for FolderDto {
-    fn from(folder: crate::domain::organisation::Folder) -> Self {
-        Self {
-            id: folder.id.to_string(),
-            name: folder.name,
-            note_count: folder.note_count,
         }
     }
 }
@@ -599,8 +607,8 @@ impl From<ReminderView> for ReminderDto {
             scheduled_at: scheduled.reminder.scheduled_at.as_millis(),
             timezone: scheduled.reminder.timezone,
             sound: scheduled.reminder.sound,
-            effective_sound_id: view.effective_sound.id.to_owned(),
-            effective_sound_label: view.effective_sound.label.to_owned(),
+            effective_sound_id: view.effective_sound.id,
+            effective_sound_label: view.effective_sound.label,
             is_exact: scheduled.occurrence.is_exact,
             recurrence: scheduled
                 .reminder
@@ -640,9 +648,10 @@ impl From<ReminderSoundCatalog> for ReminderSoundCatalogDto {
             items: catalog
                 .items
                 .into_iter()
-                .map(|preset| ReminderSoundDto {
-                    id: preset.id.to_owned(),
-                    label: preset.label.to_owned(),
+                .map(|sound| ReminderSoundDto {
+                    id: sound.id,
+                    label: sound.label,
+                    kind: kind_name(sound.kind),
                 })
                 .collect(),
         }
@@ -740,7 +749,7 @@ mod tests {
     #[test]
     fn a_bad_identifier_in_a_request_is_rejected() {
         let request = ListNotesRequest {
-            folder_id: Some("not-a-uuid".to_owned()),
+            tag_id: Some("not-a-uuid".to_owned()),
             ..ListNotesRequest::default()
         };
         let error = request.to_filter().expect_err("must not reach SQL");
@@ -791,12 +800,10 @@ mod tests {
 
     #[test]
     fn a_reminder_view_converts_to_the_wire_contract() {
-        use crate::application::use_cases::ReminderView;
+        use crate::application::use_cases::{EffectiveSound, ReminderView};
         use crate::domain::clock::Timestamp;
         use crate::domain::ids::{NoteId, ReminderId, ReminderOccurrenceId};
-        use crate::domain::reminders::{
-            Reminder, ReminderOccurrence, ScheduledReminder, SOUND_PRESETS,
-        };
+        use crate::domain::reminders::{Reminder, ReminderOccurrence, ScheduledReminder};
 
         let note_id = NoteId::new();
         let reminder_id = ReminderId::new();
@@ -823,7 +830,11 @@ mod tests {
                     is_exact: true,
                 },
             },
-            effective_sound: SOUND_PRESETS[0],
+            effective_sound: EffectiveSound {
+                id: "death_and_rebirth".to_owned(),
+                label: "Death & Rebirth".to_owned(),
+                alarm_sound_id: "death_and_rebirth".to_owned(),
+            },
         });
 
         assert_eq!(dto.note_id, note_id.to_string());
@@ -833,16 +844,47 @@ mod tests {
 
     #[test]
     fn a_sound_catalog_converts_to_the_wire_contract() {
-        use crate::application::use_cases::ReminderSoundCatalog;
-        use crate::domain::reminders::SOUND_PRESETS;
+        use crate::application::use_cases::{CatalogSound, ReminderSoundCatalog};
 
         let dto = ReminderSoundCatalogDto::from(ReminderSoundCatalog {
             default_sound_id: "death_and_rebirth".into(),
-            items: SOUND_PRESETS.to_vec(),
+            items: vec![
+                CatalogSound {
+                    id: "death_and_rebirth".into(),
+                    label: "Death & Rebirth".into(),
+                    kind: SoundKind::Preset,
+                },
+                CatalogSound {
+                    id: "system:content://media/1".into(),
+                    label: "Chime".into(),
+                    kind: SoundKind::System,
+                },
+                CatalogSound {
+                    id: "custom:beep.ogg".into(),
+                    label: "beep".into(),
+                    kind: SoundKind::Custom,
+                },
+            ],
         });
 
         assert_eq!(dto.default_sound_id, "death_and_rebirth");
-        assert_eq!(dto.items.len(), 1);
-        assert_eq!(dto.items[0].id, "death_and_rebirth");
+        let json = serde_json::to_value(&dto).expect("serialises");
+        assert_eq!(json["items"][0]["kind"], "preset");
+        assert_eq!(json["items"][1]["kind"], "system");
+        assert_eq!(json["items"][2]["kind"], "custom");
+        assert_eq!(json["items"][2]["id"], "custom:beep.ogg");
+    }
+
+    #[test]
+    fn a_picked_custom_sound_converts_with_the_custom_kind() {
+        let json = serde_json::to_value(ReminderSoundDto::custom(SoundOption {
+            id: "custom:beep.ogg".into(),
+            label: "beep".into(),
+        }))
+        .expect("serialises");
+
+        assert_eq!(json["id"], "custom:beep.ogg");
+        assert_eq!(json["label"], "beep");
+        assert_eq!(json["kind"], "custom");
     }
 }

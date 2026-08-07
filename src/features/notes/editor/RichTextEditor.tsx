@@ -119,7 +119,10 @@ export function RichTextEditor({
 
   return (
     <div className="flex flex-1 flex-col gap-3">
-      <div className="sticky top-0 z-10 pt-1">
+      {/* Stuck below the status bar, not below the top of the window: `top: 0`
+          is measured from the viewport, which on an edge-to-edge screen starts
+          behind the clock and the battery. */}
+      <div className="sticky top-[env(safe-area-inset-top)] z-10 pt-1">
         <FormatToolbar editor={editor} />
       </div>
       <SelectionMenu editor={editor} />

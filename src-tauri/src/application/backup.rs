@@ -14,12 +14,12 @@ use crate::domain::backup::{
     BACKUP_MIME_TYPE,
 };
 use crate::domain::clock::SharedClock;
-use crate::domain::reminders::{resolve_sound, ReminderRepository};
+use crate::domain::reminders::ReminderRepository;
 use crate::error::AppResult;
 use crate::infrastructure::sqlite::migrations;
 use crate::platform::{AlarmClock, DocumentStore};
 
-use super::use_cases::alarm_from;
+use super::use_cases::{alarm_from, effective_sound};
 
 /// What happened, in terms the user can be told.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -183,13 +183,18 @@ impl BackupUseCases {
         let configured_default = self.reminders.default_sound_id()?;
         let mut armed = 0;
 
+        let mut device = None;
         for scheduled in self.reminders.active_scheduled(now)? {
-            let Ok(sound) = resolve_sound(&scheduled.reminder.sound, configured_default.as_deref())
-            else {
+            let Ok(sound) = effective_sound(
+                self.alarms.as_ref(),
+                &scheduled.reminder.sound,
+                configured_default.as_deref(),
+                &mut device,
+            ) else {
                 tracing::warn!("a restored reminder names a sound this build does not have");
                 continue;
             };
-            match self.alarms.schedule(&alarm_from(&scheduled, sound)) {
+            match self.alarms.schedule(&alarm_from(&scheduled, &sound)) {
                 Ok(_) => armed += 1,
                 Err(error) => tracing::warn!(%error, "a restored reminder could not be armed"),
             }

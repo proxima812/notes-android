@@ -54,6 +54,9 @@ export function NoteChecklist({ noteId }: { readonly noteId: NoteId }): React.JS
   return (
     <section
       aria-label={t("checklist.title")}
+      // Marked as a panel so a coloured note can restyle it in CSS: see
+      // `.note-surface [data-panel]` in global.css.
+      data-panel=""
       className="bg-surface-sunken border-border-subtle flex flex-col gap-3 rounded-2xl border p-4"
     >
       <div className="flex items-center gap-2">
@@ -76,7 +79,7 @@ export function NoteChecklist({ noteId }: { readonly noteId: NoteId }): React.JS
                 onChange={() => {
                   toggle.mutate({ id: task.id, completed: !task.completed });
                 }}
-                className="size-5 shrink-0 accent-accent"
+                className="checkbox"
               />
               <span
                 className={`flex-1 text-sm ${
