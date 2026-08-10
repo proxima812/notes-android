@@ -1,0 +1,18 @@
+[default]
+description = """
+Lets the WebView run a dictation: ask whether the device can recognise speech at
+all, ask for the microphone, start and stop one recognition, and receive its
+events. No audio is exposed — the screen receives loudness readings and text,
+never a recording.
+"""
+permissions = [
+  "allow-availability",
+  "allow-request-permission",
+  "allow-language-support",
+  "allow-download-language",
+  "allow-open-app-settings",
+  "allow-take-dictation-request",
+  "allow-start",
+  "allow-stop",
+  "allow-cancel",
+]

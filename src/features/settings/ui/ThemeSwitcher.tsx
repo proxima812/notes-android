@@ -5,15 +5,16 @@ import { APP_THEMES } from "@/shared/lib/theme";
 import { useBackGuard } from "@/shared/lib/useBackGuard";
 import { useT } from "@/shared/i18n";
 import { useTheme } from "@/shared/lib/useTheme";
-import { FLOATING_BUTTON_SECONDARY, FLOATING_RIGHT_SECOND } from "@/shared/ui/floatingButton";
+import { ACTION_BUTTON_SECONDARY } from "@/shared/ui/actionButton";
 
 /**
  * The quick theme control that sits next to the compose button.
  *
- * The trigger wears the current theme's gradient instead of an icon, so the
- * control states what it does without a label. Swatches open in a row above both
- * buttons rather than as a sheet: switching themes is something people do
- * repeatedly to compare, and a sheet would cover the very screen being judged.
+ * Swatches open in a row hanging off the button rather than as a sheet:
+ * switching themes is something people do repeatedly to compare, and a sheet
+ * would cover the very screen being judged. The row is anchored to the right
+ * edge because the button is the last in its line and a left-anchored panel
+ * would run off the screen.
  */
 export function ThemeSwitcher(): React.JSX.Element {
   const [open, setOpen] = useState(false);
@@ -26,7 +27,7 @@ export function ThemeSwitcher(): React.JSX.Element {
   });
 
   return (
-    <>
+    <div className="relative">
       {open && (
         <>
           <button
@@ -40,7 +41,7 @@ export function ThemeSwitcher(): React.JSX.Element {
           <div
             role="radiogroup"
             aria-label={t("theme.title")}
-            className="bg-surface-raised border-border-subtle fixed right-5 bottom-24 z-30 flex gap-2 rounded-2xl border p-2 shadow-lg"
+            className="bg-surface-raised border-border-subtle absolute top-full right-0 z-30 mt-2 flex gap-2 rounded-2xl border p-2 shadow-lg"
           >
             {APP_THEMES.map((option) => (
               <button
@@ -70,7 +71,7 @@ export function ThemeSwitcher(): React.JSX.Element {
         onClick={() => {
           setOpen((shown) => !shown);
         }}
-        className={`${FLOATING_BUTTON_SECONDARY} ${FLOATING_RIGHT_SECOND}`}
+        className={`${ACTION_BUTTON_SECONDARY} relative`}
       >
         <Palette className="size-5" />
         {/* The current theme is stated by a dot rather than by painting the whole
@@ -84,6 +85,6 @@ export function ThemeSwitcher(): React.JSX.Element {
           className="border-border-subtle absolute top-1.5 right-1.5 size-2.5 rounded-full border"
         />
       </button>
-    </>
+    </div>
   );
 }

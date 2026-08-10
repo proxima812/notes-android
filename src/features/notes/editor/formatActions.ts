@@ -8,9 +8,17 @@ import {
   Italic,
   List,
   ListOrdered,
-  Quote,
+  TextQuote,
   type LucideIcon,
 } from "lucide-react";
+
+/*
+ * The set is deliberately one family: `B` and `I` are letterforms because that
+ * is what a text tool is expected to show, and everything else is the "lines of
+ * text" glyph — headings, quote, both lists. `Quote` used to sit here and drew a
+ * pair of oversized quotation marks: correct as a symbol, but a full stop of ink
+ * next to six light line drawings.
+ */
 
 export type FormatActionKey = "bold" | "italic" | "h2" | "h3" | "quote" | "bullet" | "ordered";
 
@@ -79,7 +87,7 @@ export function useFormatActions(editor: Editor): readonly FormatAction[] {
     {
       key: "quote",
       label: t("format.quote"),
-      icon: Quote,
+      icon: TextQuote,
       active: state.quote,
       run: () => editor.chain().focus().toggleBlockquote().run(),
     },

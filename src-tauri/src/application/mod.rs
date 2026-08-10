@@ -3,5 +3,6 @@ pub mod backup;
 pub mod commands;
 pub mod dto;
 pub mod organisation;
+pub mod quick_notes;
 pub mod tasks;
 pub mod use_cases;

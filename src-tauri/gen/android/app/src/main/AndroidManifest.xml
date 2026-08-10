@@ -1,6 +1,34 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Dictated notes. The audio never leaves the recogniser: the plugin asks
+         for the on-device model and receives text, and nothing is recorded.
+
+         Edited on purpose in a generated file, like the launcher entry below:
+         `tauri android init` rewrites this manifest, so both have to be
+         re-checked after it is run. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- One short buzz when the microphone opens and two when the note is
+         saved. The case this feature was built for is a phone at your side that
+         nobody is looking at, and a screen that changes colour says nothing to
+         someone who is walking. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- Declaring RECORD_AUDIO makes Google Play infer that a microphone is
+         *required*, which would hide the app from every device without one —
+         including the Android TV boxes the leanback entry below keeps
+         supported. Dictation is one button among several, so the microphone is
+         optional and the app stays installable without it. -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- From Android 11 an app cannot see a service it has not declared, and
+         the recogniser is a service in another package. Without this,
+         `isRecognitionAvailable` answers false on every modern device. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 
     <!-- AndroidTV support -->
     <uses-feature android:name="android.software.leanback" android:required="false" />

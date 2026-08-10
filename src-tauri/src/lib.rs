@@ -51,6 +51,7 @@ pub fn run() {
         .plugin(tauri_plugin_reminders::init())
         .plugin(tauri_plugin_documents::init())
         .plugin(tauri_plugin_appicon::init())
+        .plugin(tauri_plugin_speech::init())
         .setup(|app| {
             // The database lives in the app's private directory, which Android
             // wipes on uninstall and keeps out of reach of other apps.
@@ -92,6 +93,9 @@ pub fn run() {
             application::commands::reminder_sound_preview_stop,
             application::commands::reminder_time_presets_list,
             application::commands::reminder_time_presets_save,
+            application::commands::quick_notes_settings,
+            application::commands::quick_notes_settings_save,
+            application::commands::quick_notes_create,
             application::commands::search_run,
             application::commands::search_recent,
             application::commands::search_clear_history,

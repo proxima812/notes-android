@@ -1,11 +1,20 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Check } from "lucide-react";
+import { useState } from "react";
 
 import { BackupSection } from "@/features/backup/ui/BackupSection";
 import { appInfo } from "@/features/notes/api";
+import { QuickNoteSettingsSection } from "@/features/quick-notes/ui/QuickNoteSettingsSection";
 import { describeError } from "@/shared/api/errors";
 import { useT } from "@/shared/i18n";
+import {
+  DEFAULT_APP_NAME,
+  MAX_APP_NAME_LENGTH,
+  limitAppName,
+  loadStoredAppName,
+} from "@/shared/lib/appName";
 import { APP_THEMES } from "@/shared/lib/theme";
+import { useAppName } from "@/shared/lib/useAppName";
 import { useBackGuard } from "@/shared/lib/useBackGuard";
 import { useTheme } from "@/shared/lib/useTheme";
 
@@ -44,6 +53,51 @@ function BuildInfo(): React.JSX.Element | null {
 }
 
 /**
+ * The name on the library header, and the field that changes it.
+ *
+ * The field holds its own draft rather than reading the displayed name back:
+ * emptying it means "go back to the default", and a field that answered that by
+ * filling itself with `xima.keeps` would fight anyone trying to clear it before
+ * typing. So an empty field shows the default as a placeholder and the header
+ * falls back to it, which is the same thing said twice in the right places.
+ *
+ * Every keystroke is saved. There is no confirm button because there is nothing
+ * to confirm: the header behind this screen is already showing the result.
+ */
+function AppNameSection(): React.JSX.Element {
+  const t = useT();
+  const [, save] = useAppName();
+  const [draft, setDraft] = useState(() => loadStoredAppName() ?? "");
+
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-content-muted text-sm font-medium">{t("appName.title")}</h2>
+      <input
+        type="text"
+        value={draft}
+        // The cap is enforced on the way in as well: `maxLength` counts UTF-16
+        // units, so it alone would let ten emoji through as twenty.
+        maxLength={MAX_APP_NAME_LENGTH}
+        placeholder={DEFAULT_APP_NAME}
+        aria-label={t("appName.title")}
+        onChange={(event) => {
+          // The draft keeps its spaces so a name can be typed in two words;
+          // storage trims them, so the header never shows a name that starts
+          // half a space away from the edge.
+          const typed = limitAppName(event.target.value);
+          setDraft(typed);
+          save(typed);
+        }}
+        className="border-border-subtle text-content placeholder:text-content-muted/60 focus:border-accent min-h-11 rounded-2xl border bg-transparent px-4 text-base outline-none"
+      />
+      <p className="text-content-muted text-xs">
+        {t("appName.hint", { max: MAX_APP_NAME_LENGTH })}
+      </p>
+    </section>
+  );
+}
+
+/**
  * Settings.
  *
  * The theme lives in `localStorage` rather than the SQLite settings table: it is
@@ -72,6 +126,10 @@ export function SettingsPage({ onBack }: { readonly onBack: () => void }): React
         </button>
         <h1 className="text-2xl font-semibold tracking-tight">{t("settings.title")}</h1>
       </header>
+
+      <AppNameSection />
+
+      <QuickNoteSettingsSection />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-content-muted text-sm font-medium">{t("theme.appearance")}</h2>

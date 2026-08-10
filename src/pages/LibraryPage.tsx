@@ -1,71 +1,53 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LayoutTemplate, Plus, Search } from "lucide-react";
+import { LayoutTemplate, Mic, Plus } from "lucide-react";
 import { useState } from "react";
 
 import {
   archiveNote,
   createNote,
   listNotes,
-  search,
-  splitHighlights,
   trashNote,
   unarchiveNote,
   type NoteScope,
-  type SearchHit,
 } from "@/features/notes/api";
 import { buildDoc, buildText, type NoteTemplate } from "@/features/notes/templates";
 import { NoteCard } from "@/features/notes/ui/NoteCard";
 import { listTags } from "@/features/organisation/api";
+import type { QuickNote } from "@/features/quick-notes/api";
+import { QuickNoteResult } from "@/features/quick-notes/ui/QuickNoteResult";
+import { VoiceCapture } from "@/features/quick-notes/ui/VoiceCapture";
 import { TemplatePicker } from "@/features/notes/ui/TemplatePicker";
 import { ThemeSwitcher } from "@/features/settings/ui/ThemeSwitcher";
 import { describeError } from "@/shared/api/errors";
 import { useT, type StringKey } from "@/shared/i18n";
 import { useBackGuard } from "@/shared/lib/useBackGuard";
 import type { NoteId } from "@/shared/types/ids";
-import {
-  FLOATING_BUTTON_PRIMARY,
-  FLOATING_BUTTON_SECONDARY,
-  FLOATING_RIGHT_PRIMARY,
-  FLOATING_RIGHT_THIRD,
-} from "@/shared/ui/floatingButton";
+import { ACTION_BUTTON_PRIMARY, ACTION_BUTTON_SECONDARY } from "@/shared/ui/actionButton";
 
 const TABS = [
   { scope: "active", labelKey: "library.tabActive" },
   { scope: "archived", labelKey: "library.tabArchived" },
 ] as const satisfies readonly { scope: NoteScope; labelKey: StringKey }[];
 
-function SearchResult({ hit }: { readonly hit: SearchHit }): React.JSX.Element {
-  const t = useT();
-
-  return (
-    <li className="bg-surface-raised border-border-subtle rounded-2xl border p-4">
-      <p className="truncate font-medium">{hit.title === "" ? t("common.untitled") : hit.title}</p>
-      <p className="text-content-muted mt-1 text-sm">
-        {splitHighlights(hit.snippet).map((part, index) =>
-          part.highlighted ? (
-            // eslint-disable-next-line react/no-array-index-key -- runs are positional
-            <mark key={index} className="bg-accent/25 text-content rounded px-0.5">
-              {part.text}
-            </mark>
-          ) : (
-            <span key={index}>{part.text}</span>
-          ),
-        )}
-      </p>
-    </li>
-  );
-}
-
 export function LibraryPage({
   onOpen,
+  dictateOnOpen = false,
 }: {
   readonly onOpen: (id: NoteId) => void;
+  /** True when the launcher shortcut asked for dictation rather than the list. */
+  readonly dictateOnOpen?: boolean;
 }): React.JSX.Element {
   const client = useQueryClient();
   const t = useT();
   const [scope, setScope] = useState<NoteScope>("active");
-  const [query, setQuery] = useState("");
   const [templatesOpen, setTemplatesOpen] = useState(false);
+
+  // Dictation has two pieces of screen: the sheet while it listens, and the
+  // line afterwards saying what was made. The line stays until it is dismissed
+  // or another note is dictated — someone who looked away deserves to find out
+  // what the app heard.
+  const [dictating, setDictating] = useState(dictateOnOpen);
+  const [dictated, setDictated] = useState<QuickNote | null>(null);
 
   // One tag at a time: narrowing by several at once would mostly produce empty
   // screens people cannot explain to themselves.
@@ -83,12 +65,6 @@ export function LibraryPage({
   const archivedCount = useQuery({
     queryKey: ["notes", "archived", "count"],
     queryFn: async () => (await listNotes({ scope: "archived", limit: 1 })).total,
-  });
-
-  const results = useQuery({
-    queryKey: ["search", query],
-    queryFn: () => search({ text: query, limit: 30, includeArchived: true }),
-    enabled: query.trim().length > 0,
   });
 
   const refresh = (): void => {
@@ -134,8 +110,6 @@ export function LibraryPage({
     onSuccess: refresh,
   });
 
-  const searching = query.trim().length > 0;
-
   useBackGuard(templatesOpen, () => {
     setTemplatesOpen(false);
   });
@@ -149,138 +123,175 @@ export function LibraryPage({
 
   return (
     <div className="flex flex-col gap-4">
-      <label className="bg-surface-sunken border-border-subtle flex items-center gap-2 rounded-2xl border px-4">
-        <Search className="text-content-muted size-4 shrink-0" />
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => {
-            setQuery(event.target.value);
+      {/* What the three used to be: buttons floating over the bottom of the
+          list. They sat on top of the notes and moved with nothing, so they are
+          a row now, on the line the search field used to occupy. */}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          aria-label={t("library.templates")}
+          aria-expanded={templatesOpen}
+          onClick={() => {
+            setTemplatesOpen(true);
           }}
-          placeholder={t("library.search")}
-          className="min-h-12 w-full bg-transparent outline-none"
-        />
-      </label>
+          className={ACTION_BUTTON_SECONDARY}
+        >
+          <LayoutTemplate className="size-5" />
+        </button>
 
-      {searching ? (
-        <section>
-          {results.isPending && (
-            <p className="text-content-muted text-sm">{t("library.searchInProgress")}</p>
-          )}
-          {results.error !== null && (
-            <p className="text-danger text-sm">{describeError(results.error, t)}</p>
-          )}
-          {results.data !== undefined && results.data.items.length === 0 && (
-            <p className="text-content-muted text-sm">{t("library.nothingFound")}</p>
-          )}
-          <ul className="flex flex-col gap-2">
-            {results.data?.items.map((hit) => <SearchResult key={hit.id} hit={hit} />)}
-          </ul>
-        </section>
-      ) : (
-        <>
-          {/* Filters only appear once there is something to filter by: an empty
-              row of chips on a fresh install is furniture, not a feature. */}
-          {(tags.data ?? []).length > 0 && (
-            <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+        <ThemeSwitcher />
+
+        {/* Dictation sits beside the plus rather than replacing it: it is the
+            faster way in, not the only one, and a phone in a quiet room is a
+            phone that needs the keyboard. */}
+        <button
+          type="button"
+          aria-label={t("quick.dictate")}
+          onClick={() => {
+            setDictating(true);
+          }}
+          className={ACTION_BUTTON_SECONDARY}
+        >
+          <Mic className="size-5" />
+        </button>
+
+        <button
+          type="button"
+          aria-label={t("library.newNote")}
+          onClick={() => {
+            add.mutate();
+          }}
+          disabled={add.isPending}
+          className={`${ACTION_BUTTON_PRIMARY} disabled:opacity-40`}
+        >
+          <Plus className="size-5" />
+        </button>
+      </div>
+
+      {/* Directly under the buttons, before the list: a confirmation rendered
+          after a hundred cards is a confirmation nobody ever sees. */}
+      {dictated !== null && (
+        <QuickNoteResult
+          dictated={dictated}
+          onOpen={onOpen}
+          onChanged={refresh}
+          onDismiss={() => {
+            setDictated(null);
+          }}
+        />
+      )}
+
+      {dictating && (
+        <VoiceCapture
+          onCreated={(note) => {
+            setDictating(false);
+            setDictated(note);
+            refresh();
+          }}
+          onClose={() => {
+            setDictating(false);
+          }}
+        />
+      )}
+
+      {/* Filters only appear once there is something to filter by: an empty
+          row of chips on a fresh install is furniture, not a feature. */}
+      {(tags.data ?? []).length > 0 && (
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+          <button
+            type="button"
+            aria-pressed={filter === null}
+            onClick={() => {
+              setFilter(null);
+            }}
+            className={`min-h-11 shrink-0 rounded-xl border px-3 text-sm ${
+              filter === null ? "border-accent text-content" : "border-border-subtle text-content-muted"
+            }`}
+          >
+            {t("filing.all")}
+          </button>
+          {(tags.data ?? []).map((tag) => {
+            const chosen = filter === tag.id;
+            return (
               <button
+                key={tag.id}
                 type="button"
-                aria-pressed={filter === null}
+                aria-pressed={chosen}
                 onClick={() => {
-                  setFilter(null);
+                  setFilter(chosen ? null : tag.id);
                 }}
                 className={`min-h-11 shrink-0 rounded-xl border px-3 text-sm ${
-                  filter === null
-                    ? "border-accent text-content"
-                    : "border-border-subtle text-content-muted"
+                  chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
                 }`}
               >
-                {t("filing.all")}
+                #{tag.name}
               </button>
-              {(tags.data ?? []).map((tag) => {
-                const chosen = filter === tag.id;
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    aria-pressed={chosen}
-                    onClick={() => {
-                      setFilter(chosen ? null : tag.id);
-                    }}
-                    className={`min-h-11 shrink-0 rounded-xl border px-3 text-sm ${
-                      chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
-                    }`}
-                  >
-                    #{tag.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+            );
+          })}
+        </div>
+      )}
 
-          <div role="tablist" className="bg-surface-sunken flex gap-1 rounded-2xl p-1">
-            {TABS.map((tab) => {
-              const selected = scope === tab.scope;
-              const count = tab.scope === "archived" ? (archivedCount.data ?? 0) : 0;
-              return (
-                <button
-                  key={tab.scope}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  onClick={() => {
-                    setScope(tab.scope);
-                  }}
-                  className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-medium transition-colors ${
-                    selected ? "bg-accent text-accent-content" : "text-content-muted"
+      <div role="tablist" className="bg-surface-sunken flex gap-1 rounded-2xl p-1">
+        {TABS.map((tab) => {
+          const selected = scope === tab.scope;
+          const count = tab.scope === "archived" ? (archivedCount.data ?? 0) : 0;
+          return (
+            <button
+              key={tab.scope}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => {
+                setScope(tab.scope);
+              }}
+              className={`flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl text-sm font-medium transition-colors ${
+                selected ? "bg-accent text-accent-content" : "text-content-muted"
+              }`}
+            >
+              {t(tab.labelKey)}
+              {count > 0 && (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${
+                    selected ? "bg-accent-content/15" : "bg-surface-raised text-content-muted"
                   }`}
                 >
-                  {t(tab.labelKey)}
-                  {count > 0 && (
-                    <span
-                      className={`rounded-full px-1.5 py-0.5 text-xs tabular-nums ${
-                        selected ? "bg-accent-content/15" : "bg-surface-raised text-content-muted"
-                      }`}
-                    >
-                      {count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-          <section>
-            {notes.isPending && <p className="text-content-muted text-sm">{t("common.loading")}</p>}
-            {notes.error !== null && (
-              <p className="text-danger text-sm">{describeError(notes.error, t)}</p>
-            )}
-            {notes.data !== undefined && notes.data.items.length === 0 && (
-              <p className="text-content-muted text-sm">
-                {scope === "archived" ? t("library.archiveEmpty") : t("library.empty")}
-              </p>
-            )}
-            <ul className="flex flex-col gap-2">
-              {notes.data?.items.map((note) => (
-                <NoteCard
-                  key={note.id}
-                  note={note}
-                  busy={busyId === note.id}
-                  onOpen={() => {
-                    onOpen(note.id);
-                  }}
-                  onArchive={() => {
-                    archive.mutate({ id: note.id, archived: note.isArchived });
-                  }}
-                  onDelete={() => {
-                    remove.mutate(note.id);
-                  }}
-                />
-              ))}
-            </ul>
-          </section>
-        </>
-      )}
+      <section>
+        {notes.isPending && <p className="text-content-muted text-sm">{t("common.loading")}</p>}
+        {notes.error !== null && (
+          <p className="text-danger text-sm">{describeError(notes.error, t)}</p>
+        )}
+        {notes.data !== undefined && notes.data.items.length === 0 && (
+          <p className="text-content-muted text-sm">
+            {scope === "archived" ? t("library.archiveEmpty") : t("library.empty")}
+          </p>
+        )}
+        <ul className="flex flex-col gap-2">
+          {notes.data?.items.map((note) => (
+            <NoteCard
+              key={note.id}
+              note={note}
+              busy={busyId === note.id}
+              onOpen={() => {
+                onOpen(note.id);
+              }}
+              onArchive={() => {
+                archive.mutate({ id: note.id, archived: note.isArchived });
+              }}
+              onDelete={() => {
+                remove.mutate(note.id);
+              }}
+            />
+          ))}
+        </ul>
+      </section>
 
       {(archive.error ?? remove.error ?? add.error ?? addFromTemplate.error) !== null && (
         <p className="text-danger text-sm">
@@ -299,32 +310,6 @@ export function LibraryPage({
           }}
         />
       )}
-
-      <button
-        type="button"
-        aria-label={t("library.templates")}
-        aria-expanded={templatesOpen}
-        onClick={() => {
-          setTemplatesOpen(true);
-        }}
-        className={`${FLOATING_BUTTON_SECONDARY} ${FLOATING_RIGHT_THIRD}`}
-      >
-        <LayoutTemplate className="size-5" />
-      </button>
-
-      <ThemeSwitcher />
-
-      <button
-        type="button"
-        aria-label={t("library.newNote")}
-        onClick={() => {
-          add.mutate();
-        }}
-        disabled={add.isPending}
-        className={`${FLOATING_BUTTON_PRIMARY} ${FLOATING_RIGHT_PRIMARY} disabled:opacity-40`}
-      >
-        <Plus className="size-5" />
-      </button>
     </div>
   );
 }

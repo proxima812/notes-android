@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-take-dictation-request"
+description = "Enables the take_dictation_request command without any pre-configured scope."
+commands.allow = ["take_dictation_request"]
+
+[[permission]]
+identifier = "deny-take-dictation-request"
+description = "Denies the take_dictation_request command without any pre-configured scope."
+commands.deny = ["take_dictation_request"]

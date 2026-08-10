@@ -1,4 +1,9 @@
 <resources>
     <string name="app_name">"xima.keeps"</string>
     <string name="main_activity_title">"xima.keeps"</string>
+    <!-- The launcher shortcut. Android reads its label from resources rather
+         than from the app's own language setting, so this is the device
+         language, not the one chosen in Settings. -->
+    <string name="shortcut_dictate_short">"Dictate"</string>
+    <string name="shortcut_dictate_long">"Dictate a note"</string>
 </resources>

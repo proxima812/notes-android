@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Plus } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { useState } from "react";
 
 import { describeError } from "@/shared/api/errors";
 import { useT } from "@/shared/i18n";
 import type { NoteId } from "@/shared/types/ids";
 
-import { ensureTag, listTags, setNoteTags, tagsOfNote } from "../api";
+import { deleteTag, ensureTag, listTags, setNoteTags, tagsOfNote } from "../api";
 
 /**
  * Where a note is filed: its tags.
@@ -14,11 +14,17 @@ import { ensureTag, listTags, setNoteTags, tagsOfNote } from "../api";
  * Each is a chip that toggles. Picking is the common act — making a new tag is
  * the rarer one, so it sits behind the field at the end rather than in front of
  * the list.
+ *
+ * Deleting one is rarer still, and unlike un-picking it cannot be undone by
+ * tapping again: the tag leaves every note wearing it. So it lives behind an
+ * edit mode. That mode is the confirmation — a chip cannot be destroyed by the
+ * same tap that would have selected it a moment earlier.
  */
 export function NoteFiling({ noteId }: { readonly noteId: NoteId }): React.JSX.Element {
   const t = useT();
   const client = useQueryClient();
   const [newTag, setNewTag] = useState("");
+  const [editing, setEditing] = useState(false);
 
   const allTags = useQuery({ queryKey: ["tags"], queryFn: listTags });
   const noteTags = useQuery({ queryKey: ["note-tags", noteId], queryFn: () => tagsOfNote(noteId) });
@@ -48,8 +54,19 @@ export function NoteFiling({ noteId }: { readonly noteId: NoteId }): React.JSX.E
     },
   });
 
-  const error = saveTags.error ?? addTag.error;
-  const busy = saveTags.isPending;
+  const removeTag = useMutation({
+    mutationFn: deleteTag,
+    onSuccess: async () => {
+      // The tag is gone from every note, so this note's own list is stale too.
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ["note-tags"] }),
+        refresh(),
+      ]);
+    },
+  });
+
+  const error = saveTags.error ?? addTag.error ?? removeTag.error;
+  const busy = saveTags.isPending || removeTag.isPending;
 
   const toggle = (ids: readonly string[], id: string): string[] =>
     ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id];
@@ -62,10 +79,49 @@ export function NoteFiling({ noteId }: { readonly noteId: NoteId }): React.JSX.E
       data-panel=""
       className="bg-surface-sunken border-border-subtle flex flex-col gap-2 rounded-2xl border p-4"
     >
-      <h3 className="text-content-muted text-sm font-medium">{t("filing.title")}</h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-content-muted text-sm font-medium">{t("filing.title")}</h3>
+        {(allTags.data ?? []).length > 0 && (
+          <button
+            type="button"
+            aria-pressed={editing}
+            onClick={() => {
+              setEditing((on) => !on);
+            }}
+            className="text-content-muted min-h-11 px-1 text-sm underline-offset-4 hover:underline"
+          >
+            {editing ? t("filing.manageDone") : t("filing.manage")}
+          </button>
+        )}
+      </div>
       <div className="flex flex-wrap gap-2">
         {(allTags.data ?? []).map((tag) => {
           const chosen = chosenTags.includes(tag.id);
+          const frame = `flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm ${
+            chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
+          }`;
+
+          // Two controls cannot nest in one button, so the editing chip is a
+          // frame holding the name and the × rather than a button wearing one.
+          if (editing) {
+            return (
+              <span key={tag.id} className={frame}>
+                {tag.name}
+                <button
+                  type="button"
+                  aria-label={t("filing.removeTag", { name: tag.name })}
+                  disabled={busy}
+                  onClick={() => {
+                    removeTag.mutate(tag.id);
+                  }}
+                  className="text-danger -mr-1 flex size-8 items-center justify-center rounded-lg disabled:opacity-40"
+                >
+                  <X className="size-4" />
+                </button>
+              </span>
+            );
+          }
+
           return (
             <button
               key={tag.id}
@@ -75,9 +131,7 @@ export function NoteFiling({ noteId }: { readonly noteId: NoteId }): React.JSX.E
               onClick={() => {
                 saveTags.mutate(toggle(chosenTags, tag.id));
               }}
-              className={`flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm disabled:opacity-40 ${
-                chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
-              }`}
+              className={`${frame} disabled:opacity-40`}
             >
               {chosen && <Check className="size-4" />}
               {tag.name}

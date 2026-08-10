@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Baseline capability for the main window. Kept intentionally narrow: the app is fully local and must not gain filesystem or network permissions it does not use.",
+  "description": "Baseline capability for the main window. Kept intentionally narrow: the app is fully local and must not gain filesystem or network permissions it does not use. Dictation is the one plugin the WebView may call directly, because the microphone level belongs on the screen while it is being heard; it exposes text and loudness, never audio.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "speech:default"]
 }

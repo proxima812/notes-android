@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Languages, Settings } from "lucide-react";
+import { Languages, Search, Settings } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import { listAppIcons } from "@/features/appearance/api";
@@ -7,9 +7,12 @@ import { reconcileReminderZone, topUpReminders } from "@/features/reminders/api"
 import { useReminderLaunchTarget } from "@/features/reminders/useReminderLaunchTarget";
 import { LanguagePicker } from "@/features/settings/ui/LanguagePicker";
 import { SettingsPage } from "@/features/settings/ui/SettingsPage";
+import { useDictationLaunch } from "@/features/quick-notes/useDictationLaunch";
 import { LibraryPage } from "@/pages/LibraryPage";
+import { SearchPage } from "@/pages/SearchPage";
 
 import { I18nProvider, useT } from "@/shared/i18n";
+import { useAppName } from "@/shared/lib/useAppName";
 import type { NoteId } from "@/shared/types/ids";
 
 /**
@@ -47,16 +50,23 @@ function EditorLoading(): React.JSX.Element {
   return <p className="text-content-muted p-4 text-sm">{t("common.loading")}</p>;
 }
 
-type Route = { readonly kind: "library" } | { readonly kind: "note"; readonly id: NoteId } | { readonly kind: "settings" };
+type Route =
+  | { readonly kind: "library" }
+  | { readonly kind: "note"; readonly id: NoteId }
+  | { readonly kind: "search" }
+  | { readonly kind: "settings" };
 
 /**
- * Three screens, so the route is a piece of state rather than a router: adding a
- * dependency to model "list, one note, or settings" would be more machinery than
- * the app has decisions to make.
+ * Four screens, so the route is a piece of state rather than a router: adding a
+ * dependency to model "list, one note, search, or settings" would be more
+ * machinery than the app has decisions to make.
  */
 function Shell(): React.JSX.Element {
   const [route, setRoute] = useState<Route>({ kind: "library" });
   const [languageOpen, setLanguageOpen] = useState(false);
+  // The launcher's «Продиктовать» opens the app straight into the microphone.
+  const dictateOnOpen = useDictationLaunch();
+  const [appName] = useAppName();
   const t = useT();
 
   // A reminder means a time on a clock, so crossing a border has to move the
@@ -101,6 +111,17 @@ function Shell(): React.JSX.Element {
     );
   }
 
+  if (route.kind === "search") {
+    return (
+      <SearchPage
+        onBack={toLibrary}
+        onOpen={(id) => {
+          setRoute({ kind: "note", id });
+        }}
+      />
+    );
+  }
+
   if (route.kind === "settings") {
     return <SettingsPage onBack={toLibrary} />;
   }
@@ -108,13 +129,26 @@ function Shell(): React.JSX.Element {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-5 p-4">
       <header className="flex items-center justify-between gap-1">
-        {/* The wordmark is the one place the brand gradient is spent in full;
-            everywhere else the theme shows up only as the accent. Build details
-            used to sit under it; they live at the foot of Settings now, where
-            nobody has to read past them to reach their notes. */}
-        <h1 className="min-w-0 flex-1 bg-[image:var(--app-brand)] bg-clip-text text-2xl font-semibold tracking-tight text-transparent">
-          xima.keeps
-        </h1>
+        {/* The name spelled out rather than the mark: an icon says nothing to
+            someone who renamed the app, and the name is theirs to change in
+            Settings. Ten characters is the budget, which is what keeps this
+            from crowding the three controls beside it. Build details used to
+            sit under it; they live at the foot of Settings now, where nobody
+            has to read past them to reach their notes. */}
+        <h1 className="min-w-0 flex-1 truncate text-xl font-semibold tracking-tight">{appName}</h1>
+        {/* Search is a screen of its own, reached from here rather than from a
+            field pinned over the list: the library is what people came for, and
+            search is what they ask for when it did not have what they wanted. */}
+        <button
+          type="button"
+          aria-label={t("library.search")}
+          onClick={() => {
+            setRoute({ kind: "search" });
+          }}
+          className="text-content-muted flex size-11 shrink-0 items-center justify-center rounded-full"
+        >
+          <Search className="size-5" />
+        </button>
         {/* Language sits beside Settings rather than inside it: someone who has
             opened the app in a language they cannot read needs the way out to be
             visible on the first screen, not behind a word they cannot parse. */}
@@ -150,6 +184,7 @@ function Shell(): React.JSX.Element {
       )}
 
       <LibraryPage
+        dictateOnOpen={dictateOnOpen}
         onOpen={(id) => {
           setRoute({ kind: "note", id });
         }}

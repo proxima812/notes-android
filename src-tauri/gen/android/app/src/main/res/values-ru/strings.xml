@@ -1,0 +1,4 @@
+<resources>
+    <string name="shortcut_dictate_short">"Продиктовать"</string>
+    <string name="shortcut_dictate_long">"Продиктовать заметку"</string>
+</resources>

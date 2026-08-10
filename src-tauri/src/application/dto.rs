@@ -7,12 +7,15 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::domain::clock::Timestamp;
 use crate::domain::notes::{
     Note, NoteDraft, NoteFilter, NotePatch, NoteScope, NoteSort, NoteType, Page, PageRequest,
 };
+use crate::domain::quick_notes::{settings as quick_notes_settings, QuickNoteSettings};
 use crate::domain::search::{SearchEntity, SearchHit, SearchQuery};
 use crate::error::{AppError, AppErrorDto};
 
+use super::quick_notes::QuickNoteOutcome;
 use super::use_cases::{ReminderSoundCatalog, ReminderView, SoundKind};
 use crate::platform::SoundOption;
 
@@ -654,6 +657,64 @@ impl From<ReminderSoundCatalog> for ReminderSoundCatalogDto {
                     kind: kind_name(sound.kind),
                 })
                 .collect(),
+        }
+    }
+}
+
+/// What a dictated phrase turned into.
+///
+/// The reminder is optional and its failure travels beside it rather than in
+/// place of the whole answer: "the note was made, the alarm was not, and here
+/// is why" is one outcome the screen has to be able to draw.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickNoteDto {
+    pub note: NoteDto,
+    pub reminder: Option<ReminderDto>,
+    pub reminder_error: Option<AppErrorDto>,
+    /// The instant the phrase named, before the lead was taken off it.
+    pub spoken_at: Option<i64>,
+    /// Minutes actually taken off that instant.
+    pub lead_minutes: u16,
+    /// What the recogniser heard, so the screen can show it back.
+    pub transcript: String,
+}
+
+impl From<QuickNoteOutcome> for QuickNoteDto {
+    fn from(outcome: QuickNoteOutcome) -> Self {
+        Self {
+            note: NoteDto::from(outcome.note),
+            reminder: outcome.reminder.map(ReminderDto::from),
+            reminder_error: outcome.reminder_error.as_ref().map(AppError::to_dto),
+            spoken_at: outcome.spoken_at.map(Timestamp::as_millis),
+            lead_minutes: outcome.lead_minutes,
+            transcript: outcome.transcript,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuickNoteSettingsDto {
+    /// Minutes between the reminder and the time the phrase named.
+    pub lead_minutes: u16,
+    /// `HH:MM` used when the phrase named no time.
+    pub fallback_time: String,
+    /// The leads the picker offers, in minutes.
+    ///
+    /// Sent rather than written into the screen, the way the reminder time
+    /// presets are: which amounts are worth offering is a product decision, and
+    /// product decisions live in the core. A stored lead that is not on the
+    /// list is added to it, so the current setting is always visible.
+    pub offered_leads: Vec<u16>,
+}
+
+impl From<QuickNoteSettings> for QuickNoteSettingsDto {
+    fn from(settings: QuickNoteSettings) -> Self {
+        Self {
+            lead_minutes: settings.lead_minutes(),
+            fallback_time: settings.fallback_time().label(),
+            offered_leads: quick_notes_settings::offered_leads(settings.lead_minutes()),
         }
     }
 }

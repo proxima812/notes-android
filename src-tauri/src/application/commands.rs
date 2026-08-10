@@ -17,9 +17,9 @@ use crate::state::AppState;
 
 use super::dto::{
     AppIconCatalogDto, BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest,
-    ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, ReminderDto,
-    ReminderSoundCatalogDto, ReminderSoundDto, SearchHitDto, SearchRequest, TagDto, TaskDto,
-    TaskProgressDto, UpdateNoteRequest, UpsertReminderRequest,
+    ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, QuickNoteDto, QuickNoteSettingsDto,
+    ReminderDto, ReminderSoundCatalogDto, ReminderSoundDto, SearchHitDto, SearchRequest, TagDto,
+    TaskDto, TaskProgressDto, UpdateNoteRequest, UpsertReminderRequest,
 };
 use super::use_cases::move_note_to_trash;
 
@@ -445,6 +445,48 @@ pub async fn reminder_time_presets_save(
 ) -> Result<CommandResult<Vec<String>>, ()> {
     let reminders = Arc::clone(&state.reminders);
     Ok(blocking(move || reminders.save_time_presets(&presets)).await)
+}
+
+#[tauri::command]
+pub async fn quick_notes_settings(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<QuickNoteSettingsDto>, ()> {
+    let quick_notes = Arc::clone(&state.quick_notes);
+    Ok(blocking(move || quick_notes.settings().map(QuickNoteSettingsDto::from)).await)
+}
+
+#[tauri::command]
+pub async fn quick_notes_settings_save(
+    state: State<'_, AppState>,
+    lead_minutes: u16,
+    fallback_time: String,
+) -> Result<CommandResult<QuickNoteSettingsDto>, ()> {
+    let quick_notes = Arc::clone(&state.quick_notes);
+    Ok(blocking(move || {
+        quick_notes
+            .save_settings(lead_minutes, &fallback_time)
+            .map(QuickNoteSettingsDto::from)
+    })
+    .await)
+}
+
+/// Turns one dictated sentence into a note, and into a reminder when it can.
+///
+/// The recogniser runs in the WebView's own screen and hands the finished text
+/// here; the core does not listen to a microphone and never sees audio.
+#[tauri::command]
+pub async fn quick_notes_create(
+    state: State<'_, AppState>,
+    transcript: String,
+    timezone: String,
+) -> Result<CommandResult<QuickNoteDto>, ()> {
+    let quick_notes = Arc::clone(&state.quick_notes);
+    Ok(blocking(move || {
+        quick_notes
+            .create(&transcript, &timezone)
+            .map(QuickNoteDto::from)
+    })
+    .await)
 }
 
 #[tauri::command]

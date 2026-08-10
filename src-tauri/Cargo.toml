@@ -1,6 +1,6 @@
 [package]
 name = "notes-android"
-version = "1.1.0"
+version = "2.0.0"
 description = "Local-only notes, search and reminders"
 authors = ["local"]
 edition = "2021"
@@ -36,6 +36,10 @@ tauri-plugin-reminders = { path = "plugins/reminders" }
 tauri-plugin-documents = { path = "plugins/documents" }
 # In-tree: switching which launcher icon the app shows.
 tauri-plugin-appicon = { path = "plugins/appicon" }
+# In-tree: on-device speech recognition, for dictated notes. Unlike the others
+# this one is called from the WebView, because the loudness of what the
+# microphone hears has to reach the screen while it is being heard.
+tauri-plugin-speech = { path = "plugins/speech" }
 
 [dev-dependencies]
 tempfile = "3"

@@ -10,6 +10,7 @@ use std::sync::Arc;
 use crate::application::app_icons::AppIconUseCases;
 use crate::application::backup::BackupUseCases;
 use crate::application::organisation::OrganisationUseCases;
+use crate::application::quick_notes::QuickNoteUseCases;
 use crate::application::tasks::TaskUseCases;
 use crate::application::use_cases::{NoteUseCases, ReminderUseCases, SearchUseCases};
 use crate::domain::clock::{SharedClock, SystemClock};
@@ -31,6 +32,7 @@ pub struct AppState {
     pub backup: Arc<BackupUseCases>,
     pub app_icons: Arc<AppIconUseCases>,
     pub organisation: Arc<OrganisationUseCases>,
+    pub quick_notes: Arc<QuickNoteUseCases>,
     pub tasks: Arc<TaskUseCases>,
     pub database: Arc<Database>,
     pub clock: SharedClock,
@@ -101,7 +103,23 @@ impl AppState {
             Arc::clone(&clock),
         ));
 
+        // Dictating a note leans on the two use cases above it rather than
+        // reaching for the repositories itself: a quick note is an ordinary
+        // note and an ordinary reminder, made in one press.
+        let notes = Arc::new(NoteUseCases::new(note_repository));
+        let reminders = Arc::new(ReminderUseCases::new(
+            reminder_repository,
+            alarms,
+            Arc::clone(&clock),
+        ));
+
         Ok(Self {
+            quick_notes: Arc::new(QuickNoteUseCases::new(
+                Arc::clone(&notes),
+                Arc::clone(&reminders),
+                Arc::clone(&settings) as Arc<dyn crate::domain::settings::SettingsRepository>,
+                Arc::clone(&clock),
+            )),
             tasks: Arc::new(TaskUseCases::new(
                 Arc::new(SqliteTaskRepository::new(Arc::clone(&database))),
                 Arc::clone(&clock),
@@ -112,12 +130,8 @@ impl AppState {
             )),
             app_icons: Arc::new(AppIconUseCases::new(icons, settings)),
             backup,
-            notes: Arc::new(NoteUseCases::new(note_repository)),
-            reminders: Arc::new(ReminderUseCases::new(
-                reminder_repository,
-                alarms,
-                Arc::clone(&clock),
-            )),
+            notes,
+            reminders,
             search: Arc::new(SearchUseCases::new(search_repository)),
             database,
             clock,
@@ -217,6 +231,266 @@ mod tests {
 
         let catalog = state.reminders.sound_catalog().expect("reads catalog");
         assert_eq!(catalog.default_sound_id, "death_and_rebirth");
+    }
+
+    /// The three lines every dictation test repeats.
+    fn dictating(hour: u32, minute: u32) -> (tempfile::TempDir, AppState) {
+        let zone = chrono_tz::Europe::Moscow;
+        let directory = tempfile::tempdir().expect("temp dir");
+        let clock: SharedClock = Arc::new(FixedClock::at_local(zone, 2026, 8, 10, hour, minute));
+        let state = AppState::with_services(
+            directory.path(),
+            directory.path().join("staging"),
+            clock,
+            fake_alarms(),
+            fake_documents(),
+            fake_icons(),
+        )
+        .expect("bootstraps");
+        (directory, state)
+    }
+
+    /// When the alarm was actually set for, as the local clock reads it.
+    fn armed_at(outcome: &crate::application::quick_notes::QuickNoteOutcome) -> String {
+        outcome
+            .reminder
+            .as_ref()
+            .expect("an alarm was armed")
+            .scheduled
+            .reminder
+            .scheduled_at
+            .to_zoned(chrono_tz::Europe::Moscow)
+            .expect("representable")
+            .format("%Y-%m-%d %H:%M")
+            .to_string()
+    }
+
+    /// The lead is the whole point of the feature, so the arithmetic is pinned
+    /// through the real object graph:
+    /// «встреча. 15:00» said at noon becomes a note called «Встреча» and an
+    /// alarm at 14:30, which is the shipped half-hour lead subtracted from the
+    /// time that was said.
+    #[test]
+    fn a_dictated_phrase_becomes_a_note_and_an_alarm_before_the_time_it_named() {
+        let zone = chrono_tz::Europe::Moscow;
+        let directory = tempfile::tempdir().expect("temp dir");
+        let clock: SharedClock = Arc::new(FixedClock::at_local(zone, 2026, 8, 10, 12, 0));
+
+        let state = AppState::with_services(
+            directory.path(),
+            directory.path().join("staging"),
+            clock,
+            fake_alarms(),
+            fake_documents(),
+            fake_icons(),
+        )
+        .expect("bootstraps");
+
+        let outcome = state
+            .quick_notes
+            .create("встреча. 15:00", "Europe/Moscow")
+            .expect("creates");
+
+        assert_eq!(outcome.note.title, "Встреча");
+        let reminder = outcome.reminder.expect("an alarm was armed");
+        assert_eq!(
+            reminder
+                .scheduled
+                .reminder
+                .scheduled_at
+                .to_zoned(zone)
+                .expect("representable")
+                .format("%Y-%m-%d %H:%M")
+                .to_string(),
+            "2026-08-10 14:30"
+        );
+    }
+
+    /// A phrase with no time in it is a quick note all the same: it lands on
+    /// the fallback hour, with nothing subtracted, because there is no named
+    /// event to be early for.
+    #[test]
+    fn a_phrase_with_no_time_lands_on_the_fallback_hour() {
+        let zone = chrono_tz::Europe::Moscow;
+        let directory = tempfile::tempdir().expect("temp dir");
+        let clock: SharedClock = Arc::new(FixedClock::at_local(zone, 2026, 8, 10, 12, 0));
+
+        let state = AppState::with_services(
+            directory.path(),
+            directory.path().join("staging"),
+            clock,
+            fake_alarms(),
+            fake_documents(),
+            fake_icons(),
+        )
+        .expect("bootstraps");
+
+        let outcome = state
+            .quick_notes
+            .create("купить молоко", "Europe/Moscow")
+            .expect("creates");
+
+        assert_eq!(outcome.note.title, "Купить молоко");
+        let reminder = outcome.reminder.expect("an alarm was armed");
+        assert_eq!(
+            reminder
+                .scheduled
+                .reminder
+                .scheduled_at
+                .to_zoned(zone)
+                .expect("representable")
+                .format("%H:%M")
+                .to_string(),
+            "19:00"
+        );
+    }
+
+    /// Settings are the user's, so the lead the reminder uses is the one they
+    /// last saved rather than the one the app shipped with.
+    #[test]
+    fn a_saved_lead_is_the_one_the_next_dictation_uses() {
+        let zone = chrono_tz::Europe::Moscow;
+        let directory = tempfile::tempdir().expect("temp dir");
+        let clock: SharedClock = Arc::new(FixedClock::at_local(zone, 2026, 8, 10, 12, 0));
+
+        let state = AppState::with_services(
+            directory.path(),
+            directory.path().join("staging"),
+            clock,
+            fake_alarms(),
+            fake_documents(),
+            fake_icons(),
+        )
+        .expect("bootstraps");
+
+        state
+            .quick_notes
+            .save_settings(5, "08:00")
+            .expect("saves settings");
+
+        let outcome = state
+            .quick_notes
+            .create("встреча. 15:00", "Europe/Moscow")
+            .expect("creates");
+
+        let reminder = outcome.reminder.expect("an alarm was armed");
+        assert_eq!(
+            reminder
+                .scheduled
+                .reminder
+                .scheduled_at
+                .to_zoned(zone)
+                .expect("representable")
+                .format("%H:%M")
+                .to_string(),
+            "14:55"
+        );
+    }
+
+    /// The words survive even when the alarm does not: a time that has already
+    /// gone leaves the note in the list with the failure reported beside it.
+    #[test]
+    fn a_time_that_has_gone_still_leaves_the_note_behind() {
+        let zone = chrono_tz::Europe::Moscow;
+        let directory = tempfile::tempdir().expect("temp dir");
+        let clock: SharedClock = Arc::new(FixedClock::at_local(zone, 2026, 8, 10, 12, 0));
+
+        let state = AppState::with_services(
+            directory.path(),
+            directory.path().join("staging"),
+            clock,
+            fake_alarms(),
+            fake_documents(),
+            fake_icons(),
+        )
+        .expect("bootstraps");
+
+        let outcome = state
+            .quick_notes
+            .create("сегодня в 9:00 зарядка", "Europe/Moscow")
+            .expect("the note is still made");
+
+        assert_eq!(outcome.note.title, "Зарядка");
+        assert!(outcome.reminder.is_none());
+        assert_eq!(
+            outcome
+                .reminder_error
+                .as_ref()
+                .map(crate::error::AppError::code),
+            Some("validation_time_in_past")
+        );
+    }
+
+    /// The branch that decides whether a near-term dictation rings at all.
+    ///
+    /// «встреча в 15:00» said at 14:45 asks for an alarm at 14:15, which has
+    /// gone. Refusing would be pedantic — the meeting is real and still ahead —
+    /// so it rings as soon as the alarm layer will take it.
+    #[test]
+    fn a_lead_that_would_land_in_the_past_rings_as_soon_as_it_can() {
+        let (_directory, state) = dictating(14, 45);
+
+        let outcome = state
+            .quick_notes
+            .create("встреча в 15:00", "Europe/Moscow")
+            .expect("creates");
+
+        assert_eq!(armed_at(&outcome), "2026-08-10 14:46");
+        assert_eq!(outcome.lead_minutes, 30, "the lead was asked for");
+    }
+
+    /// An hour the app chose is not the person's word, and must not be thrown
+    /// back at them as an error.
+    #[test]
+    fn a_day_with_no_hour_still_rings_when_the_fallback_has_already_passed() {
+        let (_directory, state) = dictating(20, 0);
+
+        let outcome = state
+            .quick_notes
+            .create("сегодня забрать посылку", "Europe/Moscow")
+            .expect("creates");
+
+        // Saying «сегодня» asks for more urgency, not for no reminder at all.
+        assert_eq!(armed_at(&outcome), "2026-08-10 20:01");
+        assert!(outcome.reminder_error.is_none());
+    }
+
+    /// A timer is the moment the person asked to hear from the app, so nothing
+    /// is taken off it.
+    #[test]
+    fn a_timer_rings_exactly_when_it_was_asked_to() {
+        let (_directory, state) = dictating(12, 0);
+
+        let outcome = state
+            .quick_notes
+            .create("через 20 минут снять с плиты", "Europe/Moscow")
+            .expect("creates");
+
+        assert_eq!(armed_at(&outcome), "2026-08-10 12:20");
+        assert_eq!(outcome.lead_minutes, 0);
+    }
+
+    /// The screen has to be able to say «сказали 15:00, напомню в 14:30», and
+    /// that needs both instants to survive the trip out of the core.
+    #[test]
+    fn the_outcome_carries_the_time_that_was_said_as_well_as_the_alarm() {
+        let (_directory, state) = dictating(12, 0);
+
+        let outcome = state
+            .quick_notes
+            .create("встреча. 15:00", "Europe/Moscow")
+            .expect("creates");
+
+        let spoken = outcome
+            .spoken_at
+            .expect("the phrase named a time")
+            .to_zoned(chrono_tz::Europe::Moscow)
+            .expect("representable")
+            .format("%H:%M")
+            .to_string();
+        assert_eq!(spoken, "15:00");
+        assert_eq!(armed_at(&outcome), "2026-08-10 14:30");
+        assert_eq!(outcome.lead_minutes, 30);
     }
 
     #[test]

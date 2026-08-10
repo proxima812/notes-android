@@ -25,6 +25,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The launcher's long-press menu. It has to hang on whichever
+                 alias is enabled, because the aliases are the launcher entries;
+                 the file itself belongs to the speech feature and lives in the
+                 app module beside the other resources. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <!-- Ink -->
@@ -40,6 +47,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The launcher's long-press menu. It has to hang on whichever
+                 alias is enabled, because the aliases are the launcher entries;
+                 the file itself belongs to the speech feature and lives in the
+                 app module beside the other resources. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <!-- Amber -->
@@ -55,6 +69,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The launcher's long-press menu. It has to hang on whichever
+                 alias is enabled, because the aliases are the launcher entries;
+                 the file itself belongs to the speech feature and lives in the
+                 app module beside the other resources. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <!-- Midnight -->
@@ -70,6 +91,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The launcher's long-press menu. It has to hang on whichever
+                 alias is enabled, because the aliases are the launcher entries;
+                 the file itself belongs to the speech feature and lives in the
+                 app module beside the other resources. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <!-- Paper -->
@@ -85,6 +113,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The launcher's long-press menu. It has to hang on whichever
+                 alias is enabled, because the aliases are the launcher entries;
+                 the file itself belongs to the speech feature and lives in the
+                 app module beside the other resources. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity-alias>
 
         <!-- Neon -->
@@ -100,6 +135,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- The launcher's long-press menu. It has to hang on whichever
+                 alias is enabled, because the aliases are the launcher entries;
+                 the file itself belongs to the speech feature and lives in the
+                 app module beside the other resources. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity-alias>
     </application>
 

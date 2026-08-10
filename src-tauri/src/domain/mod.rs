@@ -4,6 +4,7 @@ pub mod clock;
 pub mod ids;
 pub mod notes;
 pub mod organisation;
+pub mod quick_notes;
 pub mod reminders;
 pub mod search;
 pub mod settings;
