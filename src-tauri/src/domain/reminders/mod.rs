@@ -184,8 +184,7 @@ mod tests {
 
     #[test]
     fn a_system_sound_id_passes_through_untouched() {
-        let resolved =
-            resolve_sound("system:content://media/1", None).expect("system id resolves");
+        let resolved = resolve_sound("system:content://media/1", None).expect("system id resolves");
         assert_eq!(
             resolved,
             ResolvedSound::Device {

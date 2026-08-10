@@ -99,7 +99,6 @@ impl OrganisationUseCases {
             .set_note_tags(note_id, &ids, self.clock.now())?;
         self.organisation.tags_of_note(note_id)
     }
-
 }
 
 #[cfg(test)]
@@ -222,7 +221,6 @@ mod tests {
             links.extend(tags.iter().map(|tag| (note_id, *tag)));
             Ok(())
         }
-
     }
 
     fn fixture() -> (OrganisationUseCases, Arc<FakeOrganisation>) {

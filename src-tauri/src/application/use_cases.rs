@@ -1168,7 +1168,13 @@ mod tests {
             crate::domain::reminders::SYSTEM_SOUND_FALLBACK_LABEL
         );
         assert_eq!(
-            fixture.alarms.scheduled.lock().last().expect("armed").sound_id,
+            fixture
+                .alarms
+                .scheduled
+                .lock()
+                .last()
+                .expect("armed")
+                .sound_id,
             "system:content://media/9"
         );
     }

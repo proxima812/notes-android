@@ -236,11 +236,7 @@ mod tests {
                 ..NoteDraft::default()
             })
             .expect("creates note");
-        (
-            SqliteOrganisationRepository::new(database),
-            note.id,
-            clock,
-        )
+        (SqliteOrganisationRepository::new(database), note.id, clock)
     }
 
     #[test]
