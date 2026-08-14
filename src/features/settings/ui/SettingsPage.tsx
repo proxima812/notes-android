@@ -5,6 +5,7 @@ import { useState } from "react";
 import { BackupSection } from "@/features/backup/ui/BackupSection";
 import { appInfo } from "@/features/notes/api";
 import { QuickNoteSettingsSection } from "@/features/quick-notes/ui/QuickNoteSettingsSection";
+import { SnoozeSettingSection } from "@/features/reminders/ui/SnoozeSettingSection";
 import { describeError } from "@/shared/api/errors";
 import { useT } from "@/shared/i18n";
 import {
@@ -130,6 +131,8 @@ export function SettingsPage({ onBack }: { readonly onBack: () => void }): React
       <AppNameSection />
 
       <QuickNoteSettingsSection />
+
+      <SnoozeSettingSection />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-content-muted text-sm font-medium">{t("theme.appearance")}</h2>

@@ -23,6 +23,13 @@ export const quickNoteSettingsSchema = z.object({
    * the current setting is always the one that looks chosen.
    */
   offeredLeads: z.array(z.number().int().min(0)).min(1),
+  /**
+   * Days ahead of today the fallback time lands on: 0 today, 1 tomorrow, and
+   * anything larger a day the user asked for outright.
+   */
+  fallbackDayOffset: z.number().int().min(0),
+  /** The furthest day the core accepts, so the field can say no first. */
+  maxFallbackDayOffset: z.number().int().positive(),
 });
 
 export type QuickNoteSettings = z.infer<typeof quickNoteSettingsSchema>;
@@ -55,11 +62,12 @@ export async function loadQuickNoteSettings(): Promise<QuickNoteSettings> {
 }
 
 export async function saveQuickNoteSettings(
-  settings: Pick<QuickNoteSettings, "leadMinutes" | "fallbackTime">,
+  settings: Pick<QuickNoteSettings, "leadMinutes" | "fallbackTime" | "fallbackDayOffset">,
 ): Promise<QuickNoteSettings> {
   return callCommand("quick_notes_settings_save", quickNoteSettingsSchema, {
     leadMinutes: settings.leadMinutes,
     fallbackTime: settings.fallbackTime,
+    fallbackDayOffset: settings.fallbackDayOffset,
   });
 }
 

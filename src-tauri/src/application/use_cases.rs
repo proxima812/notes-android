@@ -4,6 +4,7 @@
 //! it needs. It holds its collaborators by constructor injection, so a test can
 //! hand it a stub and the Tauri command layer stays free of logic.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::domain::clock::{SharedClock, Timestamp};
@@ -12,8 +13,8 @@ use crate::domain::notes::{
     validate_content, validate_title, Note, NoteRepository, Page, PageRequest,
 };
 use crate::domain::reminders::{
-    parse_zone, recurrence, reinterpret, resolve_sound, sound_presets, time_presets, Recurrence,
-    ReminderDraft, ReminderRepository, ResolvedSound, ScheduledReminder,
+    parse_zone, recurrence, reinterpret, resolve_sound, snooze, sound_presets, time_presets,
+    Recurrence, ReminderDraft, ReminderRepository, ResolvedSound, ScheduledReminder,
     CUSTOM_SOUND_FALLBACK_LABEL, CUSTOM_SOUND_PREFIX, FALLBACK_SOUND_ID,
     SYSTEM_SOUND_FALLBACK_LABEL, WINDOW,
 };
@@ -25,12 +26,15 @@ use super::dto::{ListNotesRequest, SearchRequest, UpsertReminderRequest};
 
 pub struct NoteUseCases {
     notes: Arc<dyn NoteRepository>,
+    /// Only "notes with a reminder still to come" needs it, and it needs it to
+    /// be the core's clock rather than an instant the caller sends.
+    clock: SharedClock,
 }
 
 impl NoteUseCases {
     #[must_use]
-    pub fn new(notes: Arc<dyn NoteRepository>) -> Self {
-        Self { notes }
+    pub fn new(notes: Arc<dyn NoteRepository>, clock: SharedClock) -> Self {
+        Self { notes, clock }
     }
 
     /// # Errors
@@ -78,7 +82,7 @@ impl NoteUseCases {
     /// # Errors
     /// Fails when a request identifier is malformed, or on a database error.
     pub fn list(&self, request: &ListNotesRequest) -> AppResult<Page<Note>> {
-        let filter = request.to_filter()?;
+        let filter = request.to_filter(self.clock.now())?;
         self.notes.list(&filter, request.sort, request.to_page())
     }
 
@@ -91,7 +95,7 @@ impl NoteUseCases {
     /// # Errors
     /// Fails when a request identifier is malformed, or on a database error.
     pub fn count(&self, request: &ListNotesRequest) -> AppResult<u32> {
-        self.notes.count(&request.to_filter()?)
+        self.notes.count(&request.to_filter(self.clock.now())?)
     }
 }
 
@@ -180,6 +184,48 @@ impl ReminderUseCases {
             .collect()
     }
 
+    /// The reminders of several notes at once, keyed by note.
+    ///
+    /// One read for a whole page rather than one per card, the way a page of
+    /// notes already collects its tags. Notes without a reminder are absent
+    /// from the map.
+    ///
+    /// # Errors
+    /// Fails for a malformed note id, invalid sound setting, or storage errors.
+    pub fn list_for_notes(
+        &self,
+        note_ids: &[String],
+    ) -> AppResult<HashMap<String, Vec<ReminderView>>> {
+        let ids = note_ids
+            .iter()
+            .map(|id| NoteId::parse(id))
+            .collect::<AppResult<Vec<_>>>()?;
+        let configured_default = self.reminders.default_sound_id()?;
+        let mut device = None;
+        let mut by_note: HashMap<String, Vec<ReminderView>> = HashMap::new();
+
+        for (note_id, scheduled) in self.reminders.list_for_notes(&ids, self.clock.now())? {
+            let views = scheduled
+                .into_iter()
+                .map(|scheduled| {
+                    let effective_sound = effective_sound(
+                        self.alarms.as_ref(),
+                        &scheduled.reminder.sound,
+                        configured_default.as_deref(),
+                        &mut device,
+                    )?;
+                    Ok(ReminderView {
+                        scheduled,
+                        effective_sound,
+                    })
+                })
+                .collect::<AppResult<Vec<_>>>()?;
+            by_note.insert(note_id.to_string(), views);
+        }
+
+        Ok(by_note)
+    }
+
     /// Creates or replaces the note's reminder and everything armed for it.
     ///
     /// A repeating reminder is armed several firings ahead. Nothing wakes the
@@ -251,6 +297,7 @@ impl ReminderUseCases {
             occurrences,
         };
 
+        let snooze = self.snooze_minutes()?;
         let alarms = Arc::clone(&self.alarms);
         // Whatever was armed before the failure has to come back off: the
         // transaction rolls the rows back, and an alarm with no row behind it
@@ -260,7 +307,7 @@ impl ReminderUseCases {
             draft,
             &mut |next| {
                 armed.push(next.occurrence.alarm_request_code);
-                alarms.schedule(&alarm_from(next, &effective_sound))
+                alarms.schedule(&alarm_from(next, &effective_sound, snooze))
             },
             &mut |code| alarms.cancel(code),
         );
@@ -293,6 +340,7 @@ impl ReminderUseCases {
         self.reminders.mark_elapsed(now)?;
 
         let configured_default = self.reminders.default_sound_id()?;
+        let snooze = self.snooze_minutes()?;
         let alarms = Arc::clone(&self.alarms);
         let mut device = None;
         let mut added = 0;
@@ -325,7 +373,7 @@ impl ReminderUseCases {
             match self
                 .reminders
                 .extend_window(&thin.reminder, &instants, &mut |next| {
-                    alarms.schedule(&alarm_from(next, &sound))
+                    alarms.schedule(&alarm_from(next, &sound, snooze))
                 }) {
                 Ok(count) => added += count,
                 Err(error) => tracing::warn!(%error, "a repeating reminder could not be extended"),
@@ -412,6 +460,7 @@ impl ReminderUseCases {
     pub fn reconcile_zone(&self, device_zone: &str) -> AppResult<u32> {
         let target = parse_zone(device_zone)?;
         let configured_default = self.reminders.default_sound_id()?;
+        let snooze = self.snooze_minutes()?;
         let mut device = None;
         let mut moved = 0;
 
@@ -438,7 +487,7 @@ impl ReminderUseCases {
             };
             // Re-arming replaces the alarm under the same request code, so the
             // old instant is not left behind to fire as well.
-            match self.alarms.schedule(&alarm_from(&updated, &sound)) {
+            match self.alarms.schedule(&alarm_from(&updated, &sound, snooze)) {
                 Ok(_) => moved += 1,
                 Err(error) => tracing::warn!(%error, "a moved reminder could not be re-armed"),
             }
@@ -549,6 +598,63 @@ impl ReminderUseCases {
         Ok(labels(&time_presets::parse_stored(stored.as_deref())?))
     }
 
+    /// How long the notification's "later" button moves a reminder by.
+    ///
+    /// # Errors
+    /// Fails when the stored value is not a number this build accepts, or on a
+    /// database error.
+    pub fn snooze_minutes(&self) -> AppResult<i64> {
+        snooze::parse_stored(self.reminders.snooze_minutes()?.as_deref())
+    }
+
+    /// Sets it, and re-arms everything already waiting.
+    ///
+    /// The amount travels inside the alarm intent, because the notification is
+    /// posted by a receiver that may run with the app process dead and cannot
+    /// read the database. So an alarm armed yesterday still carries yesterday's
+    /// answer, and changing the setting has to go round and replace them.
+    /// Re-arming uses the same request codes, so nothing is left behind to fire
+    /// twice.
+    ///
+    /// # Errors
+    /// Fails for nought, a negative amount or more than a day, and on a
+    /// database error. A single reminder that cannot be re-armed is logged and
+    /// skipped: the setting is still stored, and the next start arms it.
+    pub fn save_snooze_minutes(&self, minutes: i64) -> AppResult<i64> {
+        let minutes = snooze::validate(minutes)?;
+        self.reminders.set_snooze_minutes(&minutes.to_string())?;
+
+        let configured_default = self.reminders.default_sound_id()?;
+        let mut device = None;
+        for scheduled in self.reminders.active_scheduled(self.clock.now())? {
+            let Ok(sound) = effective_sound(
+                self.alarms.as_ref(),
+                &scheduled.reminder.sound,
+                configured_default.as_deref(),
+                &mut device,
+            ) else {
+                tracing::warn!("a reminder names a sound this build does not have");
+                continue;
+            };
+            if let Err(error) = self
+                .alarms
+                .schedule(&alarm_from(&scheduled, &sound, minutes))
+            {
+                tracing::warn!(%error, "a reminder could not be re-armed with the new snooze");
+            }
+        }
+
+        Ok(minutes)
+    }
+
+    /// The amounts the picker offers, with the stored one among them.
+    ///
+    /// # Errors
+    /// Fails when the stored value cannot be read.
+    pub fn offered_snoozes(&self) -> AppResult<Vec<i64>> {
+        Ok(snooze::offered(self.snooze_minutes()?))
+    }
+
     /// Replaces the whole set with the one the user now wants.
     ///
     /// The whole list is written rather than a diff applied, because "delete
@@ -570,7 +676,11 @@ fn labels(presets: &[time_presets::TimePreset]) -> Vec<String> {
     presets.iter().map(|preset| preset.label()).collect()
 }
 
-pub(super) fn alarm_from(scheduled: &ScheduledReminder, sound: &EffectiveSound) -> Alarm {
+pub(super) fn alarm_from(
+    scheduled: &ScheduledReminder,
+    sound: &EffectiveSound,
+    snooze_minutes: i64,
+) -> Alarm {
     Alarm {
         occurrence_id: scheduled.occurrence.id.to_string(),
         note_id: scheduled.reminder.note_id.to_string(),
@@ -582,7 +692,7 @@ pub(super) fn alarm_from(scheduled: &ScheduledReminder, sound: &EffectiveSound) 
         sound_id: sound.alarm_sound_id.clone(),
         sound_label: sound.label.clone(),
         vibrate: true,
-        snooze_minutes: scheduled.reminder.snooze_minutes,
+        snooze_minutes,
     }
 }
 
@@ -826,7 +936,7 @@ mod tests {
         let reminder_repository =
             Arc::new(SqliteReminderRepository::new(database, Arc::clone(&clock)));
         ReminderFixture {
-            notes: NoteUseCases::new(note_repository),
+            notes: NoteUseCases::new(note_repository, Arc::clone(&clock)),
             reminders: ReminderUseCases::new(reminder_repository, alarms.clone(), clock),
             note_id: note.id,
             alarms,
@@ -844,6 +954,97 @@ mod tests {
             sound: "default".into(),
             recurrence: None,
         }
+    }
+
+    /// The amount travels inside the alarm intent, so an alarm armed before the
+    /// setting changed would still postpone by the old amount. Nothing wakes
+    /// the core when the notification's button is pressed, so it cannot be
+    /// looked up then: the alarms have to be replaced now.
+    #[test]
+    fn changing_the_later_amount_re_arms_what_is_already_waiting() {
+        let fixture = reminder_fixture(true, true);
+        fixture
+            .reminders
+            .upsert_for_note(valid_reminder_request(fixture.note_id))
+            .expect("saves");
+
+        let armed = fixture.alarms.scheduled.lock().last().cloned();
+        assert_eq!(
+            armed.expect("an alarm was armed").snooze_minutes,
+            60,
+            "an hour is what the app ships with"
+        );
+
+        fixture
+            .reminders
+            .save_snooze_minutes(15)
+            .expect("saves the setting");
+
+        let again = fixture.alarms.scheduled.lock().last().cloned();
+        assert_eq!(again.expect("the alarm was armed again").snooze_minutes, 15);
+    }
+
+    #[test]
+    fn a_later_amount_of_nothing_is_refused() {
+        let fixture = reminder_fixture(true, true);
+        let error = fixture
+            .reminders
+            .save_snooze_minutes(0)
+            .expect_err("must refuse");
+        assert_eq!(error.code(), "validation_invalid");
+        assert_eq!(
+            fixture.reminders.snooze_minutes().expect("reads"),
+            60,
+            "a refused value is not stored"
+        );
+    }
+
+    /// The screen listing what is still going to happen asks for its notes and
+    /// their reminders in two reads, not one plus one per card.
+    #[test]
+    fn notes_without_a_reminder_are_absent_from_the_batch_read() {
+        let fixture = reminder_fixture(true, true);
+        fixture
+            .reminders
+            .upsert_for_note(valid_reminder_request(fixture.note_id))
+            .expect("saves");
+
+        let missing = NoteId::new().to_string();
+        let by_note = fixture
+            .reminders
+            .list_for_notes(&[fixture.note_id.to_string(), missing.clone()])
+            .expect("reads");
+
+        assert_eq!(
+            by_note
+                .get(&fixture.note_id.to_string())
+                .map(Vec::len)
+                .unwrap_or_default(),
+            1
+        );
+        assert!(!by_note.contains_key(&missing));
+    }
+
+    #[test]
+    fn only_notes_with_something_still_to_come_are_listed() {
+        let fixture = reminder_fixture(true, true);
+        let request = ListNotesRequest {
+            has_reminder: true,
+            ..ListNotesRequest::default()
+        };
+
+        assert_eq!(
+            fixture.notes.list(&request).expect("lists").total,
+            0,
+            "a note with no reminder is not on that screen"
+        );
+
+        fixture
+            .reminders
+            .upsert_for_note(valid_reminder_request(fixture.note_id))
+            .expect("saves");
+
+        assert_eq!(fixture.notes.list(&request).expect("lists").total, 1);
     }
 
     #[test]
@@ -928,10 +1129,13 @@ mod tests {
             Arc::new(FixedClock::new(Timestamp::from_millis(1_700_000_000_000)));
         let database = Arc::new(Database::open_in_memory(1_700_000_000_000).expect("opens"));
         Fixture {
-            notes: NoteUseCases::new(Arc::new(SqliteNoteRepository::new(
-                Arc::clone(&database),
+            notes: NoteUseCases::new(
+                Arc::new(SqliteNoteRepository::new(
+                    Arc::clone(&database),
+                    Arc::clone(&clock),
+                )),
                 Arc::clone(&clock),
-            ))),
+            ),
             search: SearchUseCases::new(Arc::new(SqliteSearchRepository::new(database, clock))),
         }
     }

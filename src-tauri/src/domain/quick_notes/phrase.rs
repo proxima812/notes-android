@@ -892,6 +892,28 @@ pub fn next_time_of_day(time: TimePreset, now: Timestamp, zone: Tz) -> AppResult
     instant_at(today + Duration::days(1), hour, minute, zone)
 }
 
+/// The same hour, `days` days from today.
+///
+/// Nought is [`next_time_of_day`] — today, or tomorrow once the hour has gone —
+/// because a reminder cannot be set for an hour that has already passed and the
+/// person is standing there having just said something they want kept. Any
+/// other number is the day they asked for and is taken literally.
+///
+/// # Errors
+/// Propagates a zone conversion failure.
+pub fn time_of_day_in_days(
+    time: TimePreset,
+    now: Timestamp,
+    zone: Tz,
+    days: u16,
+) -> AppResult<Timestamp> {
+    if days == 0 {
+        return next_time_of_day(time, now, zone);
+    }
+    let date = now.to_zoned(zone)?.date_naive() + Duration::days(i64::from(days));
+    instant_at(date, u32::from(time.hour()), u32::from(time.minute()), zone)
+}
+
 /// Which half of the day a spoken hour most likely meant.
 ///
 /// «Встреча в три» is at three in the afternoon; «завтрак в девять» is at nine

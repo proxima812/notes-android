@@ -6,7 +6,13 @@ import { describeError } from "@/shared/api/errors";
 import { useT } from "@/shared/i18n";
 import type { NoteId } from "@/shared/types/ids";
 
-import { createTaskForNote, deleteTask, listTasksForNote, setTaskCompleted } from "../api";
+import {
+  clearTasksForNote,
+  createTaskForNote,
+  deleteTask,
+  listTasksForNote,
+  setTaskCompleted,
+} from "../api";
 
 /**
  * The note's checklist.
@@ -18,6 +24,8 @@ export function NoteChecklist({ noteId }: { readonly noteId: NoteId }): React.JS
   const t = useT();
   const client = useQueryClient();
   const [draft, setDraft] = useState("");
+  // Asking is the confirmation; there is no dialog to dismiss by accident.
+  const [confirming, setConfirming] = useState(false);
 
   const tasks = useQuery({ queryKey: ["tasks", noteId], queryFn: () => listTasksForNote(noteId) });
 
@@ -38,8 +46,15 @@ export function NoteChecklist({ noteId }: { readonly noteId: NoteId }): React.JS
     onSuccess: refresh,
   });
   const remove = useMutation({ mutationFn: deleteTask, onSuccess: refresh });
+  const clear = useMutation({
+    mutationFn: () => clearTasksForNote(noteId),
+    onSuccess: async () => {
+      setConfirming(false);
+      await refresh();
+    },
+  });
 
-  const error = add.error ?? toggle.error ?? remove.error;
+  const error = add.error ?? toggle.error ?? remove.error ?? clear.error;
   const items = tasks.data ?? [];
   const done = items.filter((task) => task.completed).length;
 
@@ -123,6 +138,47 @@ export function NoteChecklist({ noteId }: { readonly noteId: NoteId }): React.JS
           <Plus className="size-4" />
         </button>
       </form>
+
+      {/* A checklist opened by mistake is taken back in one act rather than a
+          row at a time. It asks first, because unlike the tap that made it this
+          one cannot be undone by tapping again. */}
+      {items.length > 0 &&
+        (confirming ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-content flex-1 text-sm">
+              {t("checklist.clearConfirm", { count: items.length })}
+            </p>
+            <button
+              type="button"
+              disabled={clear.isPending}
+              onClick={() => {
+                clear.mutate();
+              }}
+              className="text-danger border-border-subtle min-h-11 rounded-xl border px-3 text-sm font-medium disabled:opacity-40"
+            >
+              {t("checklist.clearYes")}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(false);
+              }}
+              className="text-content-muted min-h-11 rounded-xl px-3 text-sm font-medium"
+            >
+              {t("common.cancel")}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setConfirming(true);
+            }}
+            className="text-content-muted min-h-11 self-start px-1 text-sm underline-offset-4 hover:underline"
+          >
+            {t("checklist.clear")}
+          </button>
+        ))}
 
       {error != null && (
         <p role="alert" className="text-danger text-sm">

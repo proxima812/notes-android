@@ -106,7 +106,7 @@ impl AppState {
         // Dictating a note leans on the two use cases above it rather than
         // reaching for the repositories itself: a quick note is an ordinary
         // note and an ordinary reminder, made in one press.
-        let notes = Arc::new(NoteUseCases::new(note_repository));
+        let notes = Arc::new(NoteUseCases::new(note_repository, Arc::clone(&clock)));
         let reminders = Arc::new(ReminderUseCases::new(
             reminder_repository,
             alarms,
@@ -345,6 +345,50 @@ mod tests {
         );
     }
 
+    /// The day is the user's too: someone who dictates errands for the next
+    /// morning rather than for tonight says so once, in Settings.
+    #[test]
+    fn a_saved_day_is_the_one_a_phrase_without_one_lands_on() {
+        let zone = chrono_tz::Europe::Moscow;
+        let directory = tempfile::tempdir().expect("temp dir");
+        let clock: SharedClock = Arc::new(FixedClock::at_local(zone, 2026, 8, 10, 12, 0));
+
+        let state = AppState::with_services(
+            directory.path(),
+            directory.path().join("staging"),
+            clock,
+            fake_alarms(),
+            fake_documents(),
+            fake_icons(),
+        )
+        .expect("bootstraps");
+
+        state
+            .quick_notes
+            .save_settings(30, "19:00", 1)
+            .expect("saves settings");
+
+        let outcome = state
+            .quick_notes
+            .create("купить молоко", "Europe/Moscow")
+            .expect("creates");
+
+        let reminder = outcome.reminder.expect("an alarm was armed");
+        assert_eq!(
+            reminder
+                .scheduled
+                .reminder
+                .scheduled_at
+                .to_zoned(zone)
+                .expect("representable")
+                .format("%d %H:%M")
+                .to_string(),
+            "11 19:00",
+            "tomorrow evening, not tonight, which is where the same hour would \
+             have landed with the day left at today"
+        );
+    }
+
     /// Settings are the user's, so the lead the reminder uses is the one they
     /// last saved rather than the one the app shipped with.
     #[test]
@@ -365,7 +409,7 @@ mod tests {
 
         state
             .quick_notes
-            .save_settings(5, "08:00")
+            .save_settings(5, "08:00", 0)
             .expect("saves settings");
 
         let outcome = state

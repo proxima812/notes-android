@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::domain::clock::{SharedClock, Timestamp};
 use crate::domain::notes::{Note, NoteDraft, NoteType};
 use crate::domain::quick_notes::{
-    next_time_of_day, parse_phrase, settings as quick_settings, QuickNoteSettings,
+    parse_phrase, settings as quick_settings, time_of_day_in_days, QuickNoteSettings,
     QUICK_NOTES_SETTING_KEY,
 };
 use crate::domain::reminders::{parse_zone, time_presets::TimePreset};
@@ -90,17 +90,23 @@ impl QuickNoteUseCases {
         quick_settings::parse_stored(stored.as_deref())
     }
 
-    /// Replaces both settings at once.
+    /// Replaces all three settings at once.
     ///
     /// # Errors
     /// Fails when the lead is longer than a day, when the time is not a real
-    /// `HH:MM`, or on a database error.
+    /// `HH:MM`, when the day is further off than a month, or on a database
+    /// error.
     pub fn save_settings(
         &self,
         lead_minutes: u16,
         fallback_time: &str,
+        fallback_day_offset: u16,
     ) -> AppResult<QuickNoteSettings> {
-        let settings = QuickNoteSettings::new(lead_minutes, TimePreset::parse(fallback_time)?)?;
+        let settings = QuickNoteSettings::new(
+            lead_minutes,
+            TimePreset::parse(fallback_time)?,
+            fallback_day_offset,
+        )?;
         self.settings.write(
             QUICK_NOTES_SETTING_KEY,
             &quick_settings::serialise(settings)?,
@@ -180,7 +186,12 @@ impl QuickNoteUseCases {
         let (named_at, lead_applies) = match phrase.named_at {
             Some(at) => (at, phrase.named_clock_time),
             None => (
-                next_time_of_day(settings.fallback_time(), now, zone)?,
+                time_of_day_in_days(
+                    settings.fallback_time(),
+                    now,
+                    zone,
+                    settings.fallback_day_offset(),
+                )?,
                 false,
             ),
         };

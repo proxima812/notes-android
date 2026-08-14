@@ -107,6 +107,16 @@ pub trait TaskRepository: Send + Sync {
     /// Fails on a database error.
     fn delete(&self, id: TaskId, now: Timestamp) -> AppResult<()>;
 
+    /// Takes the whole checklist off a note, answering how many rows went.
+    ///
+    /// One call rather than a delete per row: emptying a checklist someone
+    /// opened by accident is a single act, and doing it row by row would leave
+    /// half a list behind if the app were closed part-way.
+    ///
+    /// # Errors
+    /// Fails on a database error.
+    fn delete_for_note(&self, note_id: NoteId, now: Timestamp) -> AppResult<u32>;
+
     /// Totals for a note, for showing progress without loading every row.
     ///
     /// # Errors

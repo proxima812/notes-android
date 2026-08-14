@@ -1,7 +1,8 @@
-import { ChevronDown, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { useT } from "@/shared/i18n";
+import { PickerField, PICKER_CLASSES } from "@/shared/ui/PickerField";
 
 import {
   RECURRENCE_IDS,
@@ -38,32 +39,6 @@ interface ReminderPanelProps {
   readonly onSavePresets: (next: readonly string[]) => void;
   readonly onSave: (value: ReminderFormValue) => void;
   readonly onClose: () => void;
-}
-
-/** Shared classes for the three controls that open a picker. */
-const PICKER_CLASSES =
-  "picker-field bg-surface border-border-subtle text-content min-h-11 w-full rounded-xl border pl-3 pr-10 outline-none focus:border-accent";
-
-/**
- * Wraps a picker control and draws its arrow.
- *
- * The arrow is ours rather than the browser's because Chromium pins the native
- * one to the very edge of the field — see `.picker-field` in `global.css`. It
- * ignores taps so that hitting it still opens the picker underneath.
- */
-function PickerField({
-  children,
-  className = "",
-}: {
-  readonly children: React.ReactNode;
-  readonly className?: string;
-}): React.JSX.Element {
-  return (
-    <div className={`relative ${className}`}>
-      {children}
-      <ChevronDown className="text-content-muted pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2" />
-    </div>
-  );
 }
 
 export function localDateTimeToMillis(date: string, time: string): number {

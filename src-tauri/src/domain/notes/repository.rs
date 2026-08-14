@@ -32,6 +32,13 @@ pub struct NoteFilter {
     pub tag_id: Option<TagId>,
     pub note_type: Option<super::NoteType>,
     pub pinned_only: bool,
+    /// Only notes carrying a reminder still due after this instant.
+    ///
+    /// The instant is carried rather than read from a clock inside the query,
+    /// so a list and the reminders shown on it are answered as of the same
+    /// moment. A reminder whose time has passed does not count: this serves a
+    /// screen about what is still going to happen.
+    pub has_reminder_after: Option<crate::domain::clock::Timestamp>,
     /// Inclusive lower bound on `updated_at`.
     pub updated_after: Option<crate::domain::clock::Timestamp>,
     /// Inclusive upper bound on `updated_at`.

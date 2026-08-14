@@ -45,6 +45,15 @@ impl TaskUseCases {
         self.tasks.delete(TaskId::parse(id)?, self.clock.now())
     }
 
+    /// Empties the note's checklist, answering how many rows went.
+    ///
+    /// # Errors
+    /// Fails for a malformed identifier or on a database error.
+    pub fn clear_for_note(&self, note_id: &str) -> AppResult<u32> {
+        self.tasks
+            .delete_for_note(NoteId::parse(note_id)?, self.clock.now())
+    }
+
     /// # Errors
     /// Fails for a malformed identifier or on a database error.
     pub fn progress_for_note(&self, note_id: &str) -> AppResult<TaskProgress> {
@@ -79,6 +88,7 @@ mod tests {
             completed: bool,
         },
         Delete(TaskId),
+        DeleteForNote(NoteId),
         Progress(NoteId),
     }
 
@@ -141,6 +151,11 @@ mod tests {
             Ok(())
         }
 
+        fn delete_for_note(&self, note_id: NoteId, _now: Timestamp) -> AppResult<u32> {
+            self.calls.lock().push(Call::DeleteForNote(note_id));
+            Ok(2)
+        }
+
         fn progress_for_note(&self, note_id: NoteId) -> AppResult<TaskProgress> {
             self.calls.lock().push(Call::Progress(note_id));
             Ok(*self.progress.lock())
@@ -168,6 +183,7 @@ mod tests {
             use_cases
                 .progress_for_note("note-1")
                 .expect_err("must refuse"),
+            use_cases.clear_for_note("note-1").expect_err("must refuse"),
         ] {
             assert_eq!(error.code(), "validation_invalid");
         }
@@ -190,6 +206,21 @@ mod tests {
         }
 
         assert!(tasks.calls().is_empty());
+    }
+
+    /// Emptying a checklist someone opened by accident is one act, so it is one
+    /// call: a delete per row would leave half a list behind if it were
+    /// interrupted, and the count is what the screen says out loud afterwards.
+    #[test]
+    fn emptying_a_checklist_is_a_single_call_that_says_how_many_went() {
+        let (use_cases, tasks) = fixture();
+        let note = NoteId::new();
+
+        assert_eq!(
+            use_cases.clear_for_note(&note.to_string()).expect("clears"),
+            2
+        );
+        assert_eq!(tasks.calls(), [Call::DeleteForNote(note)]);
     }
 
     #[test]

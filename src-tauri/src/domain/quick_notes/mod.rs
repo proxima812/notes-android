@@ -24,5 +24,5 @@ pub mod numbers;
 pub mod phrase;
 pub mod settings;
 
-pub use phrase::{next_time_of_day, parse_phrase, ParsedPhrase};
+pub use phrase::{next_time_of_day, parse_phrase, time_of_day_in_days, ParsedPhrase};
 pub use settings::{QuickNoteSettings, QUICK_NOTES_SETTING_KEY};

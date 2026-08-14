@@ -77,9 +77,12 @@ pub struct PageDto<T> {
 }
 
 impl<T> PageDto<T> {
+    /// `FnMut` rather than `Fn`: a page that hands each row something looked up
+    /// once for the whole page — its tags, its reminders — takes them out of
+    /// that lookup as it goes rather than copying them.
     pub fn from_page<S, F>(page: Page<S>, convert: F) -> Self
     where
-        F: Fn(S) -> T,
+        F: FnMut(S) -> T,
     {
         let has_more = page.has_more();
         Self {
@@ -327,6 +330,10 @@ pub struct ListNotesRequest {
     pub note_type: Option<NoteType>,
     #[serde(default)]
     pub pinned_only: bool,
+    /// Only notes with a reminder still to come. The instant it is measured
+    /// against is the core's own clock, not one the caller may send.
+    #[serde(default)]
+    pub has_reminder: bool,
     pub updated_after: Option<i64>,
     pub updated_before: Option<i64>,
     pub limit: Option<u32>,
@@ -336,9 +343,13 @@ pub struct ListNotesRequest {
 impl ListNotesRequest {
     /// Converts to a domain filter, parsing any identifiers.
     ///
+    /// `now` is what "a reminder still to come" is measured against; it is
+    /// passed in rather than read here so that the list and the reminders shown
+    /// on it answer as of the same instant.
+    ///
     /// # Errors
     /// Fails when an identifier is not a UUID.
-    pub fn to_filter(&self) -> Result<NoteFilter, AppError> {
+    pub fn to_filter(&self, now: crate::domain::clock::Timestamp) -> Result<NoteFilter, AppError> {
         Ok(NoteFilter {
             scope: self.scope,
             tag_id: self
@@ -348,6 +359,7 @@ impl ListNotesRequest {
                 .transpose()?,
             note_type: self.note_type,
             pinned_only: self.pinned_only,
+            has_reminder_after: self.has_reminder.then_some(now),
             updated_after: self
                 .updated_after
                 .map(crate::domain::clock::Timestamp::from_millis),
@@ -707,6 +719,10 @@ pub struct QuickNoteSettingsDto {
     /// product decisions live in the core. A stored lead that is not on the
     /// list is added to it, so the current setting is always visible.
     pub offered_leads: Vec<u16>,
+    /// Days ahead of today the fallback time lands on: 0 today, 1 tomorrow.
+    pub fallback_day_offset: u16,
+    /// The furthest day the core will accept, so the field can say no first.
+    pub max_fallback_day_offset: u16,
 }
 
 impl From<QuickNoteSettings> for QuickNoteSettingsDto {
@@ -715,8 +731,31 @@ impl From<QuickNoteSettings> for QuickNoteSettingsDto {
             lead_minutes: settings.lead_minutes(),
             fallback_time: settings.fallback_time().label(),
             offered_leads: quick_notes_settings::offered_leads(settings.lead_minutes()),
+            fallback_day_offset: settings.fallback_day_offset(),
+            max_fallback_day_offset: quick_notes_settings::MAX_FALLBACK_DAY_OFFSET,
         }
     }
+}
+
+/// The "later" amount, with the amounts the picker offers.
+///
+/// The list comes from the core the way the dictation leads do: which amounts
+/// are worth offering is a product decision, and a stored amount that is not
+/// among them is added so the setting is always visible.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SnoozeSettingDto {
+    pub minutes: i64,
+    pub offered: Vec<i64>,
+}
+
+/// A note and everything still due on it, for the reminders screen.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteWithRemindersDto {
+    pub note: NoteSummaryDto,
+    /// Soonest first. Never empty: a note with none is not on that screen.
+    pub reminders: Vec<ReminderDto>,
 }
 
 #[cfg(test)]
@@ -813,7 +852,9 @@ mod tests {
             tag_id: Some("not-a-uuid".to_owned()),
             ..ListNotesRequest::default()
         };
-        let error = request.to_filter().expect_err("must not reach SQL");
+        let error = request
+            .to_filter(Timestamp::from_millis(0))
+            .expect_err("must not reach SQL");
         assert_eq!(error.code(), "validation_invalid");
     }
 
@@ -880,7 +921,6 @@ mod tests {
                     timezone: "Asia/Almaty".into(),
                     sound: "default".into(),
                     recurrence: None,
-                    snooze_minutes: 10,
                     is_enabled: true,
                 },
                 occurrence: ReminderOccurrence {

@@ -28,6 +28,8 @@ class ReminderReceiver : BroadcastReceiver() {
 
         when (intent.action) {
             ReminderIntents.ACTION_SNOOZE -> snooze(context, alarm)
+            ReminderIntents.ACTION_DONE ->
+                NotificationManagerCompat.from(context).cancel(alarm.requestCode)
             ReminderIntents.ACTION_FIRE -> fire(context, alarm, channelId)
             else -> Log.w(TAG, "неизвестное действие ${intent.action}")
         }
@@ -63,10 +65,17 @@ class ReminderReceiver : BroadcastReceiver() {
             // need an id that cannot collide with any request code.
             .setGroup(ReminderIntents.NOTIFICATION_GROUP)
             .setContentIntent(openIntent(context, alarm))
+            // "Done" first: it is the answer most reminders get, and the one
+            // that costs nothing to be wrong about — the note is still there.
+            .addAction(
+                R.drawable.ic_reminder,
+                context.getString(R.string.reminder_done),
+                buttonIntent(context, alarm, channelId, ReminderIntents.ACTION_DONE, DONE_REQUEST_MASK),
+            )
             .addAction(
                 R.drawable.ic_reminder,
                 context.getString(R.string.reminder_snooze),
-                snoozeIntent(context, alarm, channelId),
+                buttonIntent(context, alarm, channelId, ReminderIntents.ACTION_SNOOZE, SNOOZE_REQUEST_MASK),
             )
             .build()
 
@@ -130,9 +139,22 @@ class ReminderReceiver : BroadcastReceiver() {
         )
     }
 
-    private fun snoozeIntent(context: Context, alarm: ArmedAlarm, channelId: String): PendingIntent {
+    /**
+     * The intent behind one of the notification's buttons.
+     *
+     * Both buttons carry the whole alarm rather than a lookup key: pressing one
+     * can start this receiver in a process that holds nothing, and "later" has
+     * to be able to arm the same reminder again from what it was handed.
+     */
+    private fun buttonIntent(
+        context: Context,
+        alarm: ArmedAlarm,
+        channelId: String,
+        buttonAction: String,
+        requestMask: Int,
+    ): PendingIntent {
         val intent = Intent(context, ReminderReceiver::class.java).apply {
-            action = ReminderIntents.ACTION_SNOOZE
+            action = buttonAction
             putExtra(ReminderIntents.EXTRA_OCCURRENCE_ID, alarm.occurrenceId)
             putExtra(ReminderIntents.EXTRA_NOTE_ID, alarm.noteId)
             putExtra(ReminderIntents.EXTRA_REQUEST_CODE, alarm.requestCode)
@@ -146,11 +168,11 @@ class ReminderReceiver : BroadcastReceiver() {
             putExtra(ReminderIntents.EXTRA_SOUND_LABEL, alarm.soundLabel)
             putExtra(ReminderIntents.EXTRA_EXACT, alarm.exact)
         }
-        // A request code of its own, so pressing "later" cannot replace the
-        // alarm's own pending intent.
+        // A request code of its own, so a button cannot replace the alarm's own
+        // pending intent — or the other button's.
         return PendingIntent.getBroadcast(
             context,
-            alarm.requestCode xor SNOOZE_REQUEST_MASK,
+            alarm.requestCode xor requestMask,
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
@@ -195,5 +217,8 @@ class ReminderReceiver : BroadcastReceiver() {
 
         /** Keeps the snooze button's request code clear of the alarm's own. */
         const val SNOOZE_REQUEST_MASK = 0x4000_0000
+
+        /** And the done button's clear of both of them. */
+        const val DONE_REQUEST_MASK = 0x2000_0000
     }
 }

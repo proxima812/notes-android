@@ -1,5 +1,7 @@
 //! Persistence boundary for reminders.
 
+use std::collections::HashMap;
+
 use crate::domain::clock::Timestamp;
 use crate::domain::ids::{NoteId, ReminderId};
 use crate::error::AppResult;
@@ -20,6 +22,17 @@ pub trait ReminderRepository: Send + Sync {
     /// One row per reminder rather than per firing: a repeating reminder is
     /// one thing the user set, however many alarms stand behind it.
     fn list_for_note(&self, note_id: NoteId, now: Timestamp) -> AppResult<Vec<ScheduledReminder>>;
+
+    /// The same, for every note in the slice, in one read.
+    ///
+    /// A page of notes shows the time each of them is set for; asking per note
+    /// would be a round trip per row. Notes without a reminder are absent from
+    /// the map rather than present with an empty list.
+    fn list_for_notes(
+        &self,
+        notes: &[NoteId],
+        now: Timestamp,
+    ) -> AppResult<HashMap<NoteId, Vec<ScheduledReminder>>>;
 
     /// Writes one reminder and everything armed for it.
     ///
@@ -92,4 +105,12 @@ pub trait ReminderRepository: Send + Sync {
     fn time_presets(&self) -> AppResult<Option<String>>;
 
     fn set_time_presets(&self, raw: &str) -> AppResult<()>;
+
+    /// The stored "later" amount, still in the form it was written in.
+    ///
+    /// `None` means the user has never chosen one, which is what separates
+    /// "use the shipped hour" from "the user asked for exactly this".
+    fn snooze_minutes(&self) -> AppResult<Option<String>>;
+
+    fn set_snooze_minutes(&self, raw: &str) -> AppResult<()>;
 }

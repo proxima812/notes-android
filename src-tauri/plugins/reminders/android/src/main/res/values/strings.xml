@@ -4,4 +4,5 @@
          app process dead, so its wording cannot come from the interface's own
          translations. Android resources are the only thing available there. -->
     <string name="reminder_snooze">Отложить</string>
+    <string name="reminder_done">Готово</string>
 </resources>

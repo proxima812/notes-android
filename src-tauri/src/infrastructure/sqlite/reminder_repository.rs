@@ -1,5 +1,6 @@
 //! SQLite persistence for one-shot note reminders.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use rusqlite::{params, OptionalExtension, Row, Transaction};
@@ -10,7 +11,7 @@ use crate::domain::reminders::recurrence::Recurrence;
 use crate::domain::reminders::repository::ThinWindow;
 use crate::domain::reminders::{
     Reminder, ReminderDraft, ReminderOccurrence, ReminderRepository, ScheduledReminder,
-    DEFAULT_SOUND_SETTING_KEY, TIME_PRESETS_SETTING_KEY,
+    DEFAULT_SOUND_SETTING_KEY, SNOOZE_SETTING_KEY, TIME_PRESETS_SETTING_KEY,
 };
 use crate::error::{AppError, AppResult, ReminderError};
 
@@ -39,18 +40,35 @@ impl SqliteReminderRepository {
                 .map_err(AppError::from)
         })
     }
+
+    fn write_setting(&self, key: &str, value: &str) -> AppResult<()> {
+        let now = self.clock.now();
+        self.database.with_connection(|connection| {
+            connection
+                .execute(
+                    "INSERT INTO app_settings (key, value, updated_at)
+                          VALUES (?1, ?2, ?3)
+                     ON CONFLICT (key) DO UPDATE
+                            SET value = excluded.value,
+                                updated_at = excluded.updated_at",
+                    params![key, value, now.as_millis()],
+                )
+                .map(|_| ())
+                .map_err(AppError::from)
+        })
+    }
 }
 
 const SELECT_SCHEDULED: &str =
     "SELECT r.id, r.note_id, r.title, r.body, r.scheduled_at, r.timezone,
             r.sound, r.is_enabled, o.id, o.reminder_id, o.occurrence_at,
-            o.alarm_request_code, o.is_exact, r.recurrence_rule, r.snooze_minutes
+            o.alarm_request_code, o.is_exact, r.recurrence_rule
        FROM reminders r
        JOIN reminder_occurrences o ON o.reminder_id = r.id";
 
 const SELECT_REMINDER: &str =
     "SELECT id, note_id, title, body, scheduled_at, timezone, sound, is_enabled,
-            recurrence_rule, snooze_minutes
+            recurrence_rule
        FROM reminders";
 
 /// A rule the database holds but this build does not understand is treated as
@@ -71,7 +89,6 @@ fn map_reminder(row: &Row<'_>) -> rusqlite::Result<Reminder> {
         sound: row.get(6)?,
         is_enabled: row.get::<_, i64>(7)? != 0,
         recurrence: read_recurrence(row.get(8)?),
-        snooze_minutes: row.get(9)?,
     })
 }
 
@@ -87,7 +104,6 @@ fn map_scheduled(row: &Row<'_>) -> rusqlite::Result<ScheduledReminder> {
             sound: row.get(6)?,
             is_enabled: row.get::<_, i64>(7)? != 0,
             recurrence: read_recurrence(row.get(13)?),
-            snooze_minutes: row.get(14)?,
         },
         occurrence: ReminderOccurrence {
             id: row.get(8)?,
@@ -324,6 +340,62 @@ impl ReminderRepository for SqliteReminderRepository {
                 .collect::<rusqlite::Result<Vec<_>>>()
                 .map_err(AppError::from)?;
             Ok(rows)
+        })
+    }
+
+    fn list_for_notes(
+        &self,
+        notes: &[NoteId],
+        now: Timestamp,
+    ) -> AppResult<HashMap<NoteId, Vec<ScheduledReminder>>> {
+        if notes.is_empty() {
+            return Ok(HashMap::new());
+        }
+
+        self.database.with_connection(|connection| {
+            // The placeholder list is built from the slice length rather than
+            // from anything the user typed, so there is nothing here to inject.
+            // The two instants are bound last, after the note ids.
+            let placeholders = vec!["?"; notes.len()].join(", ");
+            let cutoff = notes.len() + 1;
+            let mut statement = connection
+                .prepare(&format!(
+                    "{SELECT_SCHEDULED}
+                      WHERE r.note_id IN ({placeholders})
+                        AND r.deleted_at IS NULL
+                        AND r.is_enabled = 1
+                        AND o.state IN ('scheduled', 'snoozed')
+                        AND o.occurrence_at > ?{cutoff}
+                        AND o.occurrence_at = (
+                              SELECT MIN(sibling.occurrence_at)
+                                FROM reminder_occurrences sibling
+                               WHERE sibling.reminder_id = r.id
+                                 AND sibling.state IN ('scheduled', 'snoozed')
+                                 AND sibling.occurrence_at > ?{cutoff}
+                            )
+                      ORDER BY o.occurrence_at"
+                ))
+                .map_err(AppError::from)?;
+
+            let ids = notes
+                .iter()
+                .map(ToString::to_string)
+                .map(rusqlite::types::Value::from)
+                .chain(std::iter::once(rusqlite::types::Value::from(
+                    now.as_millis(),
+                )));
+            let mut by_note: HashMap<NoteId, Vec<ScheduledReminder>> = HashMap::new();
+            let mut rows = statement
+                .query(rusqlite::params_from_iter(ids))
+                .map_err(AppError::from)?;
+            while let Some(row) = rows.next().map_err(AppError::from)? {
+                let scheduled = map_scheduled(row).map_err(AppError::from)?;
+                by_note
+                    .entry(scheduled.reminder.note_id)
+                    .or_default()
+                    .push(scheduled);
+            }
+            Ok(by_note)
         })
     }
 
@@ -571,20 +643,15 @@ impl ReminderRepository for SqliteReminderRepository {
     }
 
     fn set_time_presets(&self, raw: &str) -> AppResult<()> {
-        let now = self.clock.now();
-        self.database.with_connection(|connection| {
-            connection
-                .execute(
-                    "INSERT INTO app_settings (key, value, updated_at)
-                          VALUES (?1, ?2, ?3)
-                     ON CONFLICT (key) DO UPDATE
-                            SET value = excluded.value,
-                                updated_at = excluded.updated_at",
-                    params![TIME_PRESETS_SETTING_KEY, raw, now.as_millis()],
-                )
-                .map(|_| ())
-                .map_err(AppError::from)
-        })
+        self.write_setting(TIME_PRESETS_SETTING_KEY, raw)
+    }
+
+    fn snooze_minutes(&self) -> AppResult<Option<String>> {
+        self.read_setting(SNOOZE_SETTING_KEY)
+    }
+
+    fn set_snooze_minutes(&self, raw: &str) -> AppResult<()> {
+        self.write_setting(SNOOZE_SETTING_KEY, raw)
     }
 }
 

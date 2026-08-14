@@ -3,6 +3,7 @@
 
 pub mod recurrence;
 pub mod repository;
+pub mod snooze;
 pub mod time_presets;
 pub mod zones;
 
@@ -12,6 +13,7 @@ use crate::error::{AppError, AppResult, ValidationError};
 
 pub use recurrence::{Recurrence, WINDOW};
 pub use repository::ReminderRepository;
+pub use snooze::{DEFAULT_SNOOZE_MINUTES, SNOOZE_SETTING_KEY};
 pub use time_presets::{TimePreset, TIME_PRESETS_SETTING_KEY};
 pub use zones::{parse_zone, reinterpret, resolve};
 
@@ -116,8 +118,6 @@ pub struct Reminder {
     pub sound: String,
     /// `None` for a reminder that happens once.
     pub recurrence: Option<Recurrence>,
-    /// Minutes the notification's "later" button moves this reminder by.
-    pub snooze_minutes: i64,
     pub is_enabled: bool,
 }
 

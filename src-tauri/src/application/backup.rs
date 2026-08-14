@@ -14,7 +14,7 @@ use crate::domain::backup::{
     BACKUP_MIME_TYPE,
 };
 use crate::domain::clock::SharedClock;
-use crate::domain::reminders::ReminderRepository;
+use crate::domain::reminders::{snooze, ReminderRepository};
 use crate::error::AppResult;
 use crate::infrastructure::sqlite::migrations;
 use crate::platform::{AlarmClock, DocumentStore};
@@ -181,6 +181,7 @@ impl BackupUseCases {
     fn rearm(&self) -> AppResult<usize> {
         let now = self.clock.now();
         let configured_default = self.reminders.default_sound_id()?;
+        let snooze = snooze::parse_stored(self.reminders.snooze_minutes()?.as_deref())?;
         let mut armed = 0;
 
         let mut device = None;
@@ -194,7 +195,10 @@ impl BackupUseCases {
                 tracing::warn!("a restored reminder names a sound this build does not have");
                 continue;
             };
-            match self.alarms.schedule(&alarm_from(&scheduled, &sound)) {
+            match self
+                .alarms
+                .schedule(&alarm_from(&scheduled, &sound, snooze))
+            {
                 Ok(_) => armed += 1,
                 Err(error) => tracing::warn!(%error, "a restored reminder could not be armed"),
             }
@@ -407,6 +411,22 @@ mod tests {
         fn set_time_presets(&self, _raw: &str) -> AppResult<()> {
             Ok(())
         }
+
+        fn list_for_notes(
+            &self,
+            _notes: &[NoteId],
+            _now: Timestamp,
+        ) -> AppResult<std::collections::HashMap<NoteId, Vec<ScheduledReminder>>> {
+            Ok(std::collections::HashMap::new())
+        }
+
+        fn snooze_minutes(&self) -> AppResult<Option<String>> {
+            Ok(None)
+        }
+
+        fn set_snooze_minutes(&self, _raw: &str) -> AppResult<()> {
+            Ok(())
+        }
     }
 
     struct Fixture {
@@ -561,7 +581,6 @@ mod tests {
                 timezone: "Asia/Almaty".into(),
                 sound: "default".into(),
                 recurrence: None,
-                snooze_minutes: 10,
                 is_enabled: true,
             },
             occurrence: ReminderOccurrence {

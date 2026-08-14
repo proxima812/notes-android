@@ -35,6 +35,16 @@ export async function deleteTask(id: string): Promise<null> {
   return callCommand("tasks_delete", z.null(), { id });
 }
 
+/**
+ * Empties the note's checklist, answering how many rows went.
+ *
+ * One call rather than a delete per row: a checklist opened by accident is
+ * taken back in one act, and half a list left behind is worse than none.
+ */
+export async function clearTasksForNote(noteId: NoteId): Promise<number> {
+  return callCommand("tasks_clear_for_note", z.number().int(), { noteId });
+}
+
 export async function taskProgressForNote(noteId: NoteId): Promise<TaskProgress> {
   return callCommand("tasks_progress_for_note", taskProgressSchema, { noteId });
 }

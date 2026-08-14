@@ -139,6 +139,23 @@ export function NoteFiling({ noteId }: { readonly noteId: NoteId }): React.JSX.E
           );
         })}
       </div>
+      {/* Un-picking chips one by one is fine for one; someone who opened this
+          panel by accident and tapped a few wants them all off at once. The
+          tags themselves stay — this takes them off this note only, which is
+          why it does not ask first: every chip is one tap from coming back. */}
+      {chosenTags.length > 0 && !editing && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            saveTags.mutate([]);
+          }}
+          className="text-content-muted min-h-11 self-start px-1 text-sm underline-offset-4 hover:underline disabled:opacity-40"
+        >
+          {t("filing.clear", { count: chosenTags.length })}
+        </button>
+      )}
+
       <div className="flex items-center gap-2">
         <input
           type="text"

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { noteSummarySchema, type Page } from "@/features/notes/api";
 import { callCommand } from "@/shared/api/command";
 import {
   deviceTimeZone,
@@ -128,6 +129,35 @@ export async function listRemindersForNote(noteIdValue: NoteId): Promise<Reminde
   });
 }
 
+/** A note on the reminders screen, with everything still due on it. */
+export const noteWithRemindersSchema = z.object({
+  note: noteSummarySchema,
+  reminders: z.array(reminderSchema).min(1),
+});
+
+export type NoteWithReminders = z.infer<typeof noteWithRemindersSchema>;
+
+const noteWithRemindersPageSchema = z.object({
+  items: z.array(noteWithRemindersSchema),
+  total: z.number().int(),
+  limit: z.number().int(),
+  offset: z.number().int(),
+  hasMore: z.boolean(),
+});
+
+/**
+ * The notes with a reminder still to come, soonest first.
+ *
+ * One call rather than a list of notes followed by a read per card: the screen
+ * shows every note's time, and a hundred round trips for a hundred rows would
+ * be felt.
+ */
+export async function listNotesWithReminders(limit = 100): Promise<Page<NoteWithReminders>> {
+  return callCommand("notes_list_with_reminders", noteWithRemindersPageSchema, {
+    request: { scope: "all_except_trash", sort: "next_reminder", limit },
+  });
+}
+
 export async function upsertReminderForNote(
   request: UpsertReminderRequest,
 ): Promise<Reminder> {
@@ -202,6 +232,34 @@ export async function previewReminderSound(soundId: string): Promise<null> {
 
 export async function stopReminderSoundPreview(): Promise<null> {
   return callCommand("reminder_sound_preview_stop", z.null());
+}
+
+/**
+ * How long the notification's "later" button moves a reminder by.
+ *
+ * One number for the whole app rather than one per reminder: "later" is how
+ * long this person needs before being asked again.
+ */
+export const snoozeSettingSchema = z.object({
+  minutes: z.number().int().positive(),
+  offered: z.array(z.number().int().positive()).min(1),
+});
+
+export type SnoozeSetting = z.infer<typeof snoozeSettingSchema>;
+
+export async function loadSnoozeSetting(): Promise<SnoozeSetting> {
+  return callCommand("reminder_snooze_get", snoozeSettingSchema);
+}
+
+/**
+ * Stores it and re-arms everything already waiting.
+ *
+ * The amount travels inside the alarm the OS holds, so the core has to go round
+ * and replace them; that is why this can take a moment on a phone with many
+ * reminders.
+ */
+export async function saveSnoozeSetting(minutes: number): Promise<SnoozeSetting> {
+  return callCommand("reminder_snooze_save", snoozeSettingSchema, { minutes });
 }
 
 /**

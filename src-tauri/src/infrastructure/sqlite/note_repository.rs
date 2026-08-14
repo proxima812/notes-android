@@ -113,6 +113,20 @@ fn where_clause(filter: &NoteFilter) -> (String, Vec<Value>) {
         params.push(Value::Text(note_type.as_str().to_owned()));
     }
 
+    if let Some(instant) = filter.has_reminder_after {
+        // Occurrences rather than the reminder's own time: a repeat is anchored
+        // to the first firing, which is in the past by the second week.
+        conditions.push(
+            "EXISTS (SELECT 1 FROM reminder_occurrences o \
+             JOIN reminders r ON r.id = o.reminder_id \
+             WHERE r.note_id = notes.id AND r.deleted_at IS NULL \
+             AND r.is_enabled = 1 AND o.state IN ('scheduled', 'snoozed') \
+             AND o.occurrence_at > ?)"
+                .to_owned(),
+        );
+        params.push(Value::Integer(instant.as_millis()));
+    }
+
     if let Some(after) = filter.updated_after {
         conditions.push("notes.updated_at >= ?".to_owned());
         params.push(Value::Integer(after.as_millis()));
@@ -389,10 +403,12 @@ impl NoteRepository for SqliteNoteRepository {
             // it; SQLite skips unreferenced result columns in the other cases.
             let sql = format!(
                 "SELECT {NOTE_COLUMNS},
-                        (SELECT MIN(r.scheduled_at) FROM reminders r
+                        (SELECT MIN(o.occurrence_at) FROM reminder_occurrences o
+                           JOIN reminders r ON r.id = o.reminder_id
                           WHERE r.note_id = notes.id
                             AND r.deleted_at IS NULL
-                            AND r.is_enabled = 1) AS next_reminder_at
+                            AND r.is_enabled = 1
+                            AND o.state IN ('scheduled', 'snoozed')) AS next_reminder_at
                  FROM notes
                  WHERE {conditions}
                  ORDER BY {}

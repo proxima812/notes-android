@@ -47,8 +47,12 @@ internal data class ArmedAlarm(
         private const val KEY_EXACT = "exact"
         private const val KEY_SNOOZE_MINUTES = "snooze_minutes"
 
-        /** Matches the column default in the schema. */
-        const val DEFAULT_SNOOZE_MINUTES = 10
+        /**
+         * Only reached by an alarm stored without the value — one armed by an
+         * older build. The core decides this; it is `reminders.snooze_minutes`
+         * there, and an hour is what it ships with.
+         */
+        const val DEFAULT_SNOOZE_MINUTES = 60
 
         fun fromJson(raw: String): ArmedAlarm = JSONObject(raw).let { json ->
             ArmedAlarm(

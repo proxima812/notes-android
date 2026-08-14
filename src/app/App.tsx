@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Languages, Search, Settings } from "lucide-react";
+import { AlarmClock, Languages, Search, Settings } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import { listAppIcons } from "@/features/appearance/api";
@@ -9,6 +9,7 @@ import { LanguagePicker } from "@/features/settings/ui/LanguagePicker";
 import { SettingsPage } from "@/features/settings/ui/SettingsPage";
 import { useDictationLaunch } from "@/features/quick-notes/useDictationLaunch";
 import { LibraryPage } from "@/pages/LibraryPage";
+import { RemindersPage } from "@/pages/RemindersPage";
 import { SearchPage } from "@/pages/SearchPage";
 
 import { I18nProvider, useT } from "@/shared/i18n";
@@ -54,12 +55,13 @@ type Route =
   | { readonly kind: "library" }
   | { readonly kind: "note"; readonly id: NoteId }
   | { readonly kind: "search" }
+  | { readonly kind: "reminders" }
   | { readonly kind: "settings" };
 
 /**
- * Four screens, so the route is a piece of state rather than a router: adding a
- * dependency to model "list, one note, search, or settings" would be more
- * machinery than the app has decisions to make.
+ * Five screens, so the route is a piece of state rather than a router: adding a
+ * dependency to model "list, one note, search, reminders, or settings" would be
+ * more machinery than the app has decisions to make.
  */
 function Shell(): React.JSX.Element {
   const [route, setRoute] = useState<Route>({ kind: "library" });
@@ -122,6 +124,17 @@ function Shell(): React.JSX.Element {
     );
   }
 
+  if (route.kind === "reminders") {
+    return (
+      <RemindersPage
+        onBack={toLibrary}
+        onOpen={(id) => {
+          setRoute({ kind: "note", id });
+        }}
+      />
+    );
+  }
+
   if (route.kind === "settings") {
     return <SettingsPage onBack={toLibrary} />;
   }
@@ -152,6 +165,19 @@ function Shell(): React.JSX.Element {
         {/* Language sits beside Settings rather than inside it: someone who has
             opened the app in a language they cannot read needs the way out to be
             visible on the first screen, not behind a word they cannot parse. */}
+        {/* What is going to happen, as opposed to what was written. Beside
+            search because both are ways of asking the library a question it
+            cannot answer by being scrolled. */}
+        <button
+          type="button"
+          aria-label={t("reminders.title")}
+          onClick={() => {
+            setRoute({ kind: "reminders" });
+          }}
+          className="text-content-muted flex size-11 shrink-0 items-center justify-center rounded-full"
+        >
+          <AlarmClock className="size-5" />
+        </button>
         <button
           type="button"
           aria-label={t("language.title")}

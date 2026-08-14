@@ -129,6 +129,19 @@ impl TaskRepository for SqliteTaskRepository {
         })
     }
 
+    fn delete_for_note(&self, note_id: NoteId, now: Timestamp) -> AppResult<u32> {
+        self.database.with_connection(|connection| {
+            connection
+                .execute(
+                    "UPDATE tasks SET deleted_at = ?1, updated_at = ?1
+                      WHERE note_id = ?2 AND deleted_at IS NULL",
+                    params![now.as_millis(), note_id],
+                )
+                .map(|rows| u32::try_from(rows).unwrap_or(u32::MAX))
+                .map_err(AppError::from)
+        })
+    }
+
     fn progress_for_note(&self, note_id: NoteId) -> AppResult<TaskProgress> {
         self.database.with_connection(|connection| {
             connection

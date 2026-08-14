@@ -29,12 +29,25 @@ pub const DEFAULT_LEAD_MINUTES: u16 = 30;
 /// dictated during the day is one you act on when the day frees up.
 pub const DEFAULT_FALLBACK_HOUR: u8 = 19;
 
+/// How far ahead the day may be pushed.
+///
+/// A fortnight and a bit: past that, "remind me at seven" is a plan rather than
+/// a dictated errand, and the reminder panel is where plans are made.
+pub const MAX_FALLBACK_DAY_OFFSET: u16 = 30;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QuickNoteSettings {
     /// Minutes between the reminder and the time the phrase named.
     lead_minutes: u16,
     /// The time of day used when the phrase named none.
     fallback_time: TimePreset,
+    /// Days ahead of today that time lands on when the phrase named no day.
+    ///
+    /// Nought is today — and, because a time that has gone cannot be reminded
+    /// about, the next occurrence of it, which is tomorrow after the hour has
+    /// passed. One is tomorrow, and anything larger is the day the user asked
+    /// for outright.
+    fallback_day_offset: u16,
 }
 
 impl Default for QuickNoteSettings {
@@ -43,20 +56,27 @@ impl Default for QuickNoteSettings {
             lead_minutes: DEFAULT_LEAD_MINUTES,
             fallback_time: TimePreset::new(DEFAULT_FALLBACK_HOUR, 0)
                 .expect("the shipped fallback hour is a real time"),
+            fallback_day_offset: 0,
         }
     }
 }
 
 impl QuickNoteSettings {
     /// # Errors
-    /// Returns a validation error when the lead is longer than a day.
-    pub fn new(lead_minutes: u16, fallback_time: TimePreset) -> AppResult<Self> {
-        if lead_minutes > MAX_LEAD_MINUTES {
+    /// Returns a validation error when the lead is longer than a day, or the
+    /// day is further off than a month.
+    pub fn new(
+        lead_minutes: u16,
+        fallback_time: TimePreset,
+        fallback_day_offset: u16,
+    ) -> AppResult<Self> {
+        if lead_minutes > MAX_LEAD_MINUTES || fallback_day_offset > MAX_FALLBACK_DAY_OFFSET {
             return Err(invalid());
         }
         Ok(Self {
             lead_minutes,
             fallback_time,
+            fallback_day_offset,
         })
     }
 
@@ -68,6 +88,11 @@ impl QuickNoteSettings {
     #[must_use]
     pub const fn fallback_time(self) -> TimePreset {
         self.fallback_time
+    }
+
+    #[must_use]
+    pub const fn fallback_day_offset(self) -> u16 {
+        self.fallback_day_offset
     }
 }
 
@@ -95,11 +120,16 @@ pub fn offered_leads(current: u16) -> Vec<u16> {
 }
 
 /// The stored form: JSON, so a value added later does not need a migration.
+///
+/// The day is exactly that: settings written before it existed parse as today,
+/// which is where every dictated errand landed then.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredSettings {
     lead_minutes: u16,
     fallback_time: String,
+    #[serde(default)]
+    fallback_day_offset: u16,
 }
 
 /// Reads the stored settings, falling back to the shipped ones when unset.
@@ -115,15 +145,17 @@ pub fn parse_stored(raw: Option<&str>) -> AppResult<QuickNoteSettings> {
     QuickNoteSettings::new(
         stored.lead_minutes,
         TimePreset::parse(&stored.fallback_time)?,
+        stored.fallback_day_offset,
     )
 }
 
 /// # Errors
-/// Returns an internal error only if serialising two scalars fails.
+/// Returns an internal error only if serialising three scalars fails.
 pub fn serialise(settings: QuickNoteSettings) -> AppResult<String> {
     serde_json::to_string(&StoredSettings {
         lead_minutes: settings.lead_minutes(),
         fallback_time: settings.fallback_time().label(),
+        fallback_day_offset: settings.fallback_day_offset(),
     })
     .map_err(|_| invalid())
 }
@@ -147,16 +179,16 @@ mod tests {
 
     #[test]
     fn settings_survive_a_round_trip() {
-        let settings =
-            QuickNoteSettings::new(15, TimePreset::parse("08:30").expect("parses")).expect("valid");
+        let settings = QuickNoteSettings::new(15, TimePreset::parse("08:30").expect("parses"), 2)
+            .expect("valid");
         let stored = serialise(settings).expect("serialises");
         assert_eq!(parse_stored(Some(&stored)).expect("parses"), settings);
     }
 
     #[test]
     fn no_lead_at_all_is_a_real_choice_rather_than_an_unset_value() {
-        let settings =
-            QuickNoteSettings::new(0, TimePreset::parse("19:00").expect("parses")).expect("valid");
+        let settings = QuickNoteSettings::new(0, TimePreset::parse("19:00").expect("parses"), 0)
+            .expect("valid");
         let stored = serialise(settings).expect("serialises");
         assert_eq!(
             parse_stored(Some(&stored)).expect("parses").lead_minutes(),
@@ -167,8 +199,24 @@ mod tests {
     #[test]
     fn a_lead_longer_than_a_day_is_rejected() {
         let time = TimePreset::parse("19:00").expect("parses");
-        assert!(QuickNoteSettings::new(MAX_LEAD_MINUTES, time).is_ok());
-        assert!(QuickNoteSettings::new(MAX_LEAD_MINUTES + 1, time).is_err());
+        assert!(QuickNoteSettings::new(MAX_LEAD_MINUTES, time, 0).is_ok());
+        assert!(QuickNoteSettings::new(MAX_LEAD_MINUTES + 1, time, 0).is_err());
+    }
+
+    #[test]
+    fn a_day_further_off_than_a_month_is_rejected() {
+        let time = TimePreset::parse("19:00").expect("parses");
+        assert!(QuickNoteSettings::new(30, time, MAX_FALLBACK_DAY_OFFSET).is_ok());
+        assert!(QuickNoteSettings::new(30, time, MAX_FALLBACK_DAY_OFFSET + 1).is_err());
+    }
+
+    #[test]
+    fn settings_written_before_the_day_existed_still_mean_today() {
+        // The build that wrote this had no choice of day, and everything it
+        // dictated landed on the next occurrence of the hour.
+        let settings = parse_stored(Some(r#"{"leadMinutes":30,"fallbackTime":"19:00"}"#))
+            .expect("older settings parse");
+        assert_eq!(settings.fallback_day_offset(), 0);
     }
 
     #[test]

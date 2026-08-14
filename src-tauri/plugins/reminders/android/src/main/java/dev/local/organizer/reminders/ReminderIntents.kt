@@ -11,6 +11,15 @@ internal object ReminderIntents {
     const val ACTION_FIRE = "dev.local.organizer.reminders.FIRE"
     /** Sent by the notification's own button, not by an alarm. */
     const val ACTION_SNOOZE = "dev.local.organizer.reminders.SNOOZE"
+    /**
+     * Sent by the notification's other button: the thing has been done.
+     *
+     * It takes the notification away and nothing else. A repeat is a series the
+     * user set up and one firing being dealt with says nothing about the next
+     * one; ending the whole series is a decision made in the note, where it can
+     * be seen and undone.
+     */
+    const val ACTION_DONE = "dev.local.organizer.reminders.DONE"
     /** Carried by the tap intent that reopens the app on a note. */
     const val ACTION_OPEN = "dev.local.organizer.reminders.OPEN"
 

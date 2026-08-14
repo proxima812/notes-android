@@ -17,9 +17,10 @@ use crate::state::AppState;
 
 use super::dto::{
     AppIconCatalogDto, BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest,
-    ListNotesRequest, NoteDto, NoteSummaryDto, PageDto, QuickNoteDto, QuickNoteSettingsDto,
-    ReminderDto, ReminderSoundCatalogDto, ReminderSoundDto, SearchHitDto, SearchRequest, TagDto,
-    TaskDto, TaskProgressDto, UpdateNoteRequest, UpsertReminderRequest,
+    ListNotesRequest, NoteDto, NoteSummaryDto, NoteWithRemindersDto, PageDto, QuickNoteDto,
+    QuickNoteSettingsDto, ReminderDto, ReminderSoundCatalogDto, ReminderSoundDto, SearchHitDto,
+    SearchRequest, SnoozeSettingDto, TagDto, TaskDto, TaskProgressDto, UpdateNoteRequest,
+    UpsertReminderRequest,
 };
 use super::use_cases::move_note_to_trash;
 
@@ -118,6 +119,45 @@ pub async fn notes_list(
                 .map(|tags| tags.iter().map(|tag| tag.name.clone()).collect())
                 .unwrap_or_default();
             NoteSummaryDto::from(note).with_tags(names)
+        }))
+    })
+    .await)
+}
+
+/// The notes with a reminder still to come, each carrying its own.
+///
+/// The screen behind this is a list of what is going to happen, so it is one
+/// call rather than a list followed by a reminder read per card. The request is
+/// the ordinary one with `hasReminder` set, which keeps paging, tag filtering
+/// and sorting the same as everywhere else.
+#[tauri::command]
+pub async fn notes_list_with_reminders(
+    state: State<'_, AppState>,
+    request: ListNotesRequest,
+) -> Result<CommandResult<PageDto<NoteWithRemindersDto>>, ()> {
+    let notes = Arc::clone(&state.notes);
+    let organisation = Arc::clone(&state.organisation);
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || {
+        let page = notes.list(&ListNotesRequest {
+            has_reminder: true,
+            ..request
+        })?;
+        let ids: Vec<_> = page.items.iter().map(|note| note.id).collect();
+        let tags = organisation.tags_of_notes(&ids)?;
+        let owned: Vec<String> = ids.iter().map(ToString::to_string).collect();
+        let mut due = reminders.list_for_notes(&owned)?;
+
+        Ok(PageDto::from_page(page, move |note| {
+            let names = tags
+                .get(&note.id)
+                .map(|tags| tags.iter().map(|tag| tag.name.clone()).collect())
+                .unwrap_or_default();
+            let mine = due.remove(&note.id.to_string()).unwrap_or_default();
+            NoteWithRemindersDto {
+                note: NoteSummaryDto::from(note).with_tags(names),
+                reminders: mine.into_iter().map(ReminderDto::from).collect(),
+            }
         }))
     })
     .await)
@@ -349,6 +389,16 @@ pub async fn tasks_delete(state: State<'_, AppState>, id: String) -> Result<Comm
     Ok(blocking(move || tasks.delete(&id)).await)
 }
 
+/// Empties a note's checklist in one call, answering how many rows went.
+#[tauri::command]
+pub async fn tasks_clear_for_note(
+    state: State<'_, AppState>,
+    note_id: String,
+) -> Result<CommandResult<u32>, ()> {
+    let tasks = Arc::clone(&state.tasks);
+    Ok(blocking(move || tasks.clear_for_note(&note_id)).await)
+}
+
 #[tauri::command]
 pub async fn tasks_progress_for_note(
     state: State<'_, AppState>,
@@ -447,6 +497,38 @@ pub async fn reminder_time_presets_save(
     Ok(blocking(move || reminders.save_time_presets(&presets)).await)
 }
 
+/// How long the notification's "later" button moves a reminder by, and the
+/// amounts the picker offers.
+#[tauri::command]
+pub async fn reminder_snooze_get(
+    state: State<'_, AppState>,
+) -> Result<CommandResult<SnoozeSettingDto>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || {
+        Ok(SnoozeSettingDto {
+            minutes: reminders.snooze_minutes()?,
+            offered: reminders.offered_snoozes()?,
+        })
+    })
+    .await)
+}
+
+#[tauri::command]
+pub async fn reminder_snooze_save(
+    state: State<'_, AppState>,
+    minutes: i64,
+) -> Result<CommandResult<SnoozeSettingDto>, ()> {
+    let reminders = Arc::clone(&state.reminders);
+    Ok(blocking(move || {
+        let minutes = reminders.save_snooze_minutes(minutes)?;
+        Ok(SnoozeSettingDto {
+            minutes,
+            offered: reminders.offered_snoozes()?,
+        })
+    })
+    .await)
+}
+
 #[tauri::command]
 pub async fn quick_notes_settings(
     state: State<'_, AppState>,
@@ -460,11 +542,12 @@ pub async fn quick_notes_settings_save(
     state: State<'_, AppState>,
     lead_minutes: u16,
     fallback_time: String,
+    fallback_day_offset: u16,
 ) -> Result<CommandResult<QuickNoteSettingsDto>, ()> {
     let quick_notes = Arc::clone(&state.quick_notes);
     Ok(blocking(move || {
         quick_notes
-            .save_settings(lead_minutes, &fallback_time)
+            .save_settings(lead_minutes, &fallback_time, fallback_day_offset)
             .map(QuickNoteSettingsDto::from)
     })
     .await)
