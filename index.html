@@ -7,7 +7,16 @@
          anything but zero. From Android 15 an app targeting SDK 35+ is drawn
          edge to edge whether it asks to be or not, so without this the header
          sits under the status bar and the clock covers the wordmark. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- `user-scalable=no` with the scale pinned top and bottom is what turns the
+         pinch off. A note app is not a page to zoom into: the WebView's own zoom
+         leaves the layout at phone width and simply magnifies it, so a stray
+         two-finger touch while scrolling left the app half off the screen with
+         no way back other than pinching it right again. Text size still follows
+         the phone's own setting — that is `-webkit-text-size-adjust`, not this. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
     <!-- The two subsets almost every session needs. They are found only after the
          CSS parses otherwise, which costs the first screen a frame of fallback
          text; the other six subsets stay on demand. -->

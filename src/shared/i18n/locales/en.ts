@@ -8,11 +8,14 @@ export const en: Dictionary = {
 
   "library.tabActive": "Notes",
   "library.tabArchived": "Archive",
+  "library.tabTrash": "Trash",
   "library.search": "Search",
   "library.searchInProgress": "Searching…",
   "library.nothingFound": "Nothing found.",
   "library.searchHint": "Start typing — notes are matched by title and text.",
   "library.archiveEmpty": "The archive is empty.",
+  "library.trashEmpty": "The trash is empty.",
+  "library.trashHint": "Deleted notes stay here for an hour, then they are gone for good.",
   "library.empty": "Nothing here yet. Create your first note.",
   "library.newNote": "New note",
   "library.templates": "Templates",
@@ -21,6 +24,10 @@ export const en: Dictionary = {
   "card.archive": "Archive",
   "card.unarchive": "Restore from archive",
   "card.trash": "Move to trash",
+  "card.restore": "Restore",
+  "card.purge": "Delete for good",
+  "card.trashLeft": "{minutes} min left",
+  "card.trashSoon": "Less than a minute left",
 
   "editor.notFound": "Note not found.",
   "editor.saving": "Saving…",
@@ -186,11 +193,9 @@ export const en: Dictionary = {
 
   "theme.title": "Theme",
   "theme.appearance": "Appearance",
-  "theme.close": "Close theme picker",
   "theme.mint": "Mint",
   "theme.indigo": "Indigo",
   "theme.amethyst": "Amethyst",
-  "theme.amber": "Amber",
   "theme.obsidian": "Obsidian",
 
   "color.sunset": "Sunset",

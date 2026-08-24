@@ -72,7 +72,7 @@ export function NoteChecklist({ noteId }: { readonly noteId: NoteId }): React.JS
       // Marked as a panel so a coloured note can restyle it in CSS: see
       // `.note-surface [data-panel]` in global.css.
       data-panel=""
-      className="bg-surface-sunken border-border-subtle flex flex-col gap-3 rounded-2xl border p-4"
+      className="bg-surface-sunken flex flex-col gap-3 rounded-2xl p-4"
     >
       <div className="flex items-center gap-2">
         <h3 className="text-content flex-1 text-base font-semibold">{t("checklist.title")}</h3>
@@ -127,13 +127,13 @@ export function NoteChecklist({ noteId }: { readonly noteId: NoteId }): React.JS
           onChange={(event) => {
             setDraft(event.target.value);
           }}
-          className="bg-surface border-border-subtle text-content min-h-11 flex-1 rounded-xl border px-3 outline-none focus:border-accent"
+          className="bg-surface text-content focus:ring-accent min-h-11 flex-1 rounded-xl px-3 outline-none focus:ring-2"
         />
         <button
           type="submit"
           aria-label={t("checklist.add")}
           disabled={draft.trim() === "" || add.isPending}
-          className="bg-surface-raised border-border-subtle text-content flex size-11 shrink-0 items-center justify-center rounded-xl border disabled:opacity-40"
+          className="bg-surface-raised text-content flex size-11 shrink-0 items-center justify-center rounded-xl disabled:opacity-40"
         >
           <Plus className="size-4" />
         </button>
@@ -154,7 +154,7 @@ export function NoteChecklist({ noteId }: { readonly noteId: NoteId }): React.JS
               onClick={() => {
                 clear.mutate();
               }}
-              className="text-danger border-border-subtle min-h-11 rounded-xl border px-3 text-sm font-medium disabled:opacity-40"
+              className="text-danger bg-danger/10 min-h-11 rounded-xl px-3 text-sm font-medium disabled:opacity-40"
             >
               {t("checklist.clearYes")}
             </button>

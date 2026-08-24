@@ -192,6 +192,12 @@ pub async fn notes_empty_trash(state: State<'_, AppState>) -> Result<CommandResu
 }
 
 #[tauri::command]
+pub async fn notes_purge_expired(state: State<'_, AppState>) -> Result<CommandResult<u32>, ()> {
+    let notes = Arc::clone(&state.notes);
+    Ok(blocking(move || notes.purge_expired_trash()).await)
+}
+
+#[tauri::command]
 pub async fn notes_duplicate(
     state: State<'_, AppState>,
     id: String,

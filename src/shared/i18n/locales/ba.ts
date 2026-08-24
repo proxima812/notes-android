@@ -8,11 +8,14 @@ export const ba: Dictionary = {
 
   "library.tabActive": "Яҙмалар",
   "library.tabArchived": "Архив",
+  "library.tabTrash": "Сүплек",
   "library.search": "Эҙләү",
   "library.searchInProgress": "Эҙләнә…",
   "library.nothingFound": "Бер нәмә лә табылманы.",
   "library.searchHint": "Яҙа башлағыҙ — яҙмалар исеме һәм тексы буйынса табыла.",
   "library.archiveEmpty": "Архив буш.",
+  "library.trashEmpty": "Сүплек буш.",
+  "library.trashHint": "Юйылғаны бында бер сәғәт ята, шунан бөтөнләй юғала.",
   "library.empty": "Әлегә буш. Тәүге яҙмағыҙҙы булдырығыҙ.",
   "library.newNote": "Яңы яҙма",
   "library.templates": "Өлгөләр",
@@ -21,6 +24,10 @@ export const ba: Dictionary = {
   "card.archive": "Архивҡа",
   "card.unarchive": "Архивтан ҡайтарыу",
   "card.trash": "Сүплеккә",
+  "card.restore": "Кире ҡайтарыу",
+  "card.purge": "Бөтөнләй юйыу",
+  "card.trashLeft": "{minutes} мин ҡалды",
+  "card.trashSoon": "Бер минуттан аҙ ҡалды",
 
   "editor.notFound": "Яҙма табылманы.",
   "editor.saving": "Һаҡлана…",
@@ -186,11 +193,9 @@ export const ba: Dictionary = {
 
   "theme.title": "Биҙәлеш темаһы",
   "theme.appearance": "Биҙәлеш",
-  "theme.close": "Тема һайлауҙы ябыу",
   "theme.mint": "Бөтнөк",
   "theme.indigo": "Индиго",
   "theme.amethyst": "Аметист",
-  "theme.amber": "Гәрәбә",
   "theme.obsidian": "Обсидиан",
 
   "color.sunset": "Ҡояш байыу",

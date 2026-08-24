@@ -28,9 +28,9 @@ export function LanguagePicker({ onClose }: { readonly onClose: () => void }): R
       <div
         role="radiogroup"
         aria-label={t("language.title")}
-        className="bg-surface-raised border-border-subtle fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-3xl border-t p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
+        className="bg-surface-raised fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
       >
-        <div className="bg-border-subtle mx-auto mb-4 h-1 w-10 rounded-full" />
+        <div className="bg-content-muted/40 mx-auto mb-4 h-1 w-10 rounded-full" />
         <h2 className="mb-3 text-lg font-semibold tracking-tight">{t("language.title")}</h2>
         <ul className="flex flex-col gap-1">
           {LANGUAGES.map((option) => {

@@ -7,7 +7,7 @@ import { ChevronDown } from "lucide-react";
  * The right padding is what leaves room for the arrow drawn over it.
  */
 export const PICKER_CLASSES =
-  "picker-field bg-surface border-border-subtle text-content min-h-11 w-full rounded-xl border pl-3 pr-10 outline-none focus:border-accent";
+  "picker-field bg-surface-raised text-content focus:ring-accent min-h-11 w-full rounded-xl pl-3 pr-10 outline-none focus:ring-2";
 
 /**
  * Wraps a picker control and draws its arrow.

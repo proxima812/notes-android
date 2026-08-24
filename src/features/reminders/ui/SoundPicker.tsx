@@ -145,9 +145,9 @@ export function SoundPicker({
       <div
         role="radiogroup"
         aria-label={t("reminder.soundTitle")}
-        className="bg-surface-raised border-border-subtle fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-3xl border-t p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
+        className="bg-surface-raised fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
       >
-        <div className="bg-border-subtle mx-auto mb-4 h-1 w-10 rounded-full" />
+        <div className="bg-content-muted/40 mx-auto mb-4 h-1 w-10 rounded-full" />
         <h2 className="mb-3 text-lg font-semibold tracking-tight">
           {t("reminder.soundTitle")}
         </h2>

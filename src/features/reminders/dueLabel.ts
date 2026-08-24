@@ -1,5 +1,5 @@
 import { FORMATTING_LOCALES } from "@/shared/i18n/formatting";
-import type { LanguageId } from "@/shared/i18n";
+import type { LanguageId, Translate } from "@/shared/i18n";
 
 /**
  * When a reminder is due, split so the screen can put it into a sentence.
@@ -52,6 +52,29 @@ export function formatDue(at: number, now: number, language: LanguageId): DueLab
       month: "2-digit",
     }).format(target),
   };
+}
+
+/**
+ * The same moment as one phrase — "Завтра, 08:00" — for a line or a chip.
+ *
+ * Two screens say this now: the reminders list and the card in the library, and
+ * they have to say it the same way. The date form is the two halves joined with
+ * a comma, which is what "Сегодня, 08:00" already is once the day has a name.
+ */
+export function dueSentence(
+  at: number,
+  now: number,
+  language: LanguageId,
+  t: Translate,
+): string {
+  const due = formatDue(at, now, language);
+  if (due.day === "today") {
+    return t("reminders.today", { time: due.time });
+  }
+  if (due.day === "tomorrow") {
+    return t("reminders.tomorrow", { time: due.time });
+  }
+  return `${due.date ?? ""}, ${due.time}`;
 }
 
 function startOfDay(value: Date): number {

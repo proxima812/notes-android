@@ -17,7 +17,7 @@ export interface AppTheme {
   readonly swatch: string;
 }
 
-export const APP_THEME_IDS = ["obsidian", "mint", "indigo", "amethyst", "amber"] as const;
+export const APP_THEME_IDS = ["obsidian", "mint", "indigo", "amethyst"] as const;
 
 export type AppThemeId = (typeof APP_THEME_IDS)[number];
 
@@ -50,11 +50,6 @@ export const APP_THEMES: readonly AppTheme[] = [
     id: "amethyst",
     labelKey: "theme.amethyst",
     swatch: "linear-gradient(135deg, oklch(75% 0.17 308) 0%, oklch(64% 0.17 272) 100%)",
-  },
-  {
-    id: "amber",
-    labelKey: "theme.amber",
-    swatch: "linear-gradient(135deg, oklch(88% 0.14 98) 0%, oklch(76% 0.16 58) 100%)",
   },
 ];
 

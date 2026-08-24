@@ -32,9 +32,9 @@ export function TemplatePicker({
       <div
         role="dialog"
         aria-label={t("templates.dialog")}
-        className="bg-surface-raised border-border-subtle fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-3xl border-t p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
+        className="bg-surface-raised fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-3xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
       >
-        <div className="bg-border-subtle mx-auto mb-4 h-1 w-10 rounded-full" />
+        <div className="bg-content-muted/40 mx-auto mb-4 h-1 w-10 rounded-full" />
         <h2 className="mb-3 text-lg font-semibold tracking-tight">{t("templates.title")}</h2>
         <ul className="flex flex-col gap-2">
           {templates.map((template) => (
@@ -45,7 +45,7 @@ export function TemplatePicker({
                 onClick={() => {
                   onPick(template);
                 }}
-                className="bg-surface-sunken border-border-subtle flex min-h-14 w-full flex-col justify-center rounded-2xl border px-4 py-2 text-left disabled:opacity-40"
+                className="bg-surface-sunken flex min-h-14 w-full flex-col justify-center rounded-2xl px-4 py-2 text-left disabled:opacity-40"
               >
                 <span className="font-medium">{template.label}</span>
                 <span className="text-content-muted text-sm">{template.hint}</span>

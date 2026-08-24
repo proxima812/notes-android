@@ -63,8 +63,8 @@ export function SnoozeSettingSection(): React.JSX.Element {
               onClick={() => {
                 save.mutate(minutes);
               }}
-              className={`min-h-11 shrink-0 rounded-xl border px-3 text-sm disabled:opacity-40 ${
-                chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
+              className={`min-h-11 shrink-0 rounded-xl px-3 text-sm disabled:opacity-40 ${
+                chosen ? "bg-accent text-accent-content" : "bg-surface-raised text-content-muted"
               }`}
             >
               {amountLabel(minutes, t)}

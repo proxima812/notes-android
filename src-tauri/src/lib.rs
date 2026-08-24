@@ -80,6 +80,7 @@ pub fn run() {
             application::commands::notes_restore,
             application::commands::notes_purge,
             application::commands::notes_empty_trash,
+            application::commands::notes_purge_expired,
             application::commands::notes_duplicate,
             application::commands::reminders_list_for_note,
             application::commands::reminders_upsert_for_note,

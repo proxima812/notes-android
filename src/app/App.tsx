@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AlarmClock, Languages, Search, Settings } from "lucide-react";
+import { AlarmClock, Search, Settings } from "lucide-react";
 import { lazy, Suspense, useEffect, useState } from "react";
 
 import { listAppIcons } from "@/features/appearance/api";
+import { purgeExpiredTrash } from "@/features/notes/api";
 import { reconcileReminderZone, topUpReminders } from "@/features/reminders/api";
 import { useReminderLaunchTarget } from "@/features/reminders/useReminderLaunchTarget";
-import { LanguagePicker } from "@/features/settings/ui/LanguagePicker";
 import { SettingsPage } from "@/features/settings/ui/SettingsPage";
 import { useDictationLaunch } from "@/features/quick-notes/useDictationLaunch";
 import { LibraryPage } from "@/pages/LibraryPage";
@@ -65,7 +65,6 @@ type Route =
  */
 function Shell(): React.JSX.Element {
   const [route, setRoute] = useState<Route>({ kind: "library" });
-  const [languageOpen, setLanguageOpen] = useState(false);
   // The launcher's «Продиктовать» opens the app straight into the microphone.
   const dictateOnOpen = useDictationLaunch();
   const [appName] = useAppName();
@@ -92,13 +91,20 @@ function Shell(): React.JSX.Element {
       // Off-device there is no launcher to ask, and that is not an error worth
       // showing on the first screen.
     });
+
+    // The trash keeps a note for an hour, and nothing inside the core counts
+    // that hour down — so it is counted here, at the one moment the app is
+    // certainly running. Someone who deleted a note yesterday and opens the app
+    // today finds the trash already empty, which is what the hour promised.
+    void purgeExpiredTrash().catch(() => {
+      // Nothing on the first screen depends on this having run.
+    });
   }, []);
 
   // A tapped reminder overrides whatever was on screen, including a note the
   // user had left open: they asked for this note, just now, by tapping it.
   useReminderLaunchTarget((id) => {
     setRoute({ kind: "note", id });
-    setLanguageOpen(false);
   });
 
   const toLibrary = (): void => {
@@ -162,9 +168,6 @@ function Shell(): React.JSX.Element {
         >
           <Search className="size-5" />
         </button>
-        {/* Language sits beside Settings rather than inside it: someone who has
-            opened the app in a language they cannot read needs the way out to be
-            visible on the first screen, not behind a word they cannot parse. */}
         {/* What is going to happen, as opposed to what was written. Beside
             search because both are ways of asking the library a question it
             cannot answer by being scrolled. */}
@@ -180,17 +183,6 @@ function Shell(): React.JSX.Element {
         </button>
         <button
           type="button"
-          aria-label={t("language.title")}
-          aria-expanded={languageOpen}
-          onClick={() => {
-            setLanguageOpen(true);
-          }}
-          className="text-content-muted flex size-11 shrink-0 items-center justify-center rounded-full"
-        >
-          <Languages className="size-5" />
-        </button>
-        <button
-          type="button"
           aria-label={t("settings.title")}
           onClick={() => {
             setRoute({ kind: "settings" });
@@ -200,14 +192,6 @@ function Shell(): React.JSX.Element {
           <Settings className="size-5" />
         </button>
       </header>
-
-      {languageOpen && (
-        <LanguagePicker
-          onClose={() => {
-            setLanguageOpen(false);
-          }}
-        />
-      )}
 
       <LibraryPage
         dictateOnOpen={dictateOnOpen}

@@ -21,6 +21,14 @@ pub const MAX_TITLE_LEN: usize = 500;
 /// Longest accepted body, in characters. Roughly a 400-page book.
 pub const MAX_CONTENT_LEN: usize = 1_000_000;
 
+/// How long a note stays in the trash before it is let go of.
+///
+/// The trash answers one question — "I did not mean to delete that" — and that
+/// question is asked within minutes or never. An hour is long enough to notice
+/// and short enough that deleting a note actually deletes it, which is what
+/// someone clearing out a note they would rather not keep is asking for.
+pub const TRASH_RETENTION_MINUTES: i64 = 60;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NoteType {

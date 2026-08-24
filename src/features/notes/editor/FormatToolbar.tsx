@@ -14,7 +14,7 @@ export function FormatToolbar({ editor }: { readonly editor: Editor }): React.JS
   const actions = useFormatActions(editor);
 
   return (
-    <div className="bg-surface-sunken/95 border-border-subtle flex items-center gap-1 rounded-2xl border p-1 backdrop-blur">
+    <div className="bg-surface-sunken/95 flex items-center gap-1 rounded-2xl p-1 backdrop-blur">
       {actions.map(({ key, label, icon: Icon, active, run }) => (
         <button
           key={key}

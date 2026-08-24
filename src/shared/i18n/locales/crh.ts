@@ -9,11 +9,14 @@ export const crh: Dictionary = {
 
   "library.tabActive": "Notlar",
   "library.tabArchived": "Arhiv",
+  "library.tabTrash": "Çöplük",
   "library.search": "Qıdırma",
   "library.searchInProgress": "Qıdırıla…",
   "library.nothingFound": "İç bir şey tapılmadı.",
   "library.searchHint": "Yazmağa başlañız — notlar serlevası ve metni boyunca tapıla.",
   "library.archiveEmpty": "Arhiv boş.",
+  "library.trashEmpty": "Çöplük boş.",
+  "library.trashHint": "Silingen notlar mında bir saat turalar, soñra ebediyen yoq olalar.",
   "library.empty": "Şimdilik boş. İlk notuñıznı yaratıñız.",
   "library.newNote": "Yañı not",
   "library.templates": "Şablonlar",
@@ -22,6 +25,10 @@ export const crh: Dictionary = {
   "card.archive": "Arhivge",
   "card.unarchive": "Arhivden qaytarmaq",
   "card.trash": "Çöplükke",
+  "card.restore": "Keri qaytarmaq",
+  "card.purge": "Ebediyen silmek",
+  "card.trashLeft": "{minutes} daq. qaldı",
+  "card.trashSoon": "Bir daqiqadan az qaldı",
 
   "editor.notFound": "Not tapılmadı.",
   "editor.saving": "Saqlana…",
@@ -187,11 +194,9 @@ export const crh: Dictionary = {
 
   "theme.title": "Bezetme teması",
   "theme.appearance": "Bezetme",
-  "theme.close": "Tema saylavını qapatmaq",
   "theme.mint": "Yalpız",
   "theme.indigo": "İndigo",
   "theme.amethyst": "Ametist",
-  "theme.amber": "Kehribar",
   "theme.obsidian": "Obsidian",
 
   "color.sunset": "Kün batışı",

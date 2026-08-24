@@ -4,9 +4,14 @@
 
 /* Themes.
    One axis, not two: every theme sets the whole palette, so the picker is a flat
-   list of five rather than a base-times-accent matrix the UI would have to
-   explain. All five are dark — the app has no light palette. `:root` carries the
+   list of four rather than a base-times-accent matrix the UI would have to
+   explain. All four are dark — the app has no light palette. `:root` carries the
    default (Обсидиан) so nothing is unstyled before the attribute lands.
+
+   No palette carries a line colour. Depth is the only separator the app uses: a
+   panel is a panel because it sits on a different step of the surface scale, not
+   because a hairline has been drawn round it. Accent and danger still outline
+   things, but those say "chosen" and "careful", never "here is an edge".
 
    `--app-brand` is a gradient, so it is a plain custom property rather than a
    `@theme` colour, and is spent via `bg-[image:var(--app-brand)]`. */
@@ -15,7 +20,6 @@
   --color-surface: var(--app-surface);
   --color-surface-raised: var(--app-surface-raised);
   --color-surface-sunken: var(--app-surface-sunken);
-  --color-border-subtle: var(--app-border-subtle);
   --color-content: var(--app-content);
   --color-content-muted: var(--app-content-muted);
   --color-accent: var(--app-accent);
@@ -27,12 +31,11 @@
   --animate-duration-base: 180ms;
 }
 
-/* Shared dark base for the four coloured themes. Each of those then overrides
+/* Shared dark base for the three coloured themes. Each of those then overrides
    only its accent, which is why they cannot drift apart on contrast. */
 [data-theme="mint"],
 [data-theme="indigo"],
-[data-theme="amethyst"],
-[data-theme="amber"] {
+[data-theme="amethyst"] {
   /* Tells the WebView which way round everything it draws itself goes: the date
      and time pickers, the scrollbars, the caret. Without it they arrive white on
      a dark theme. */
@@ -40,11 +43,10 @@
   --app-surface: oklch(21% 0.011 255);
   /* The three depths are held a full step apart rather than a hair: on a phone
      held at arm's length, a card that is 4% lighter than the page reads as the
-     page. Same reason the border is well clear of the surface it sits on —
-     it is what makes a button a button when nothing else outlines it. */
-  --app-surface-raised: oklch(27% 0.013 255);
+     page. With no line colour left in the palette this distance is the only
+     thing that makes a card a card, so it is the number to guard. */
+  --app-surface-raised: oklch(29% 0.013 255);
   --app-surface-sunken: oklch(15% 0.010 255);
-  --app-border-subtle: oklch(41% 0.015 255);
   --app-content: oklch(95% 0.005 255);
   --app-content-muted: oklch(70% 0.011 255);
   --app-danger: oklch(68% 0.16 25);
@@ -75,13 +77,6 @@
   --app-glow: oklch(58% 0.18 298);
 }
 
-[data-theme="amber"] {
-  --app-accent: oklch(84% 0.15 92);
-  --app-accent-content: oklch(22% 0.04 92);
-  --app-brand: linear-gradient(135deg, oklch(88% 0.14 98) 0%, oklch(76% 0.16 58) 100%);
-  --app-glow: oklch(72% 0.15 82);
-}
-
 /* Обсидиан — true black, Vercel-style: the accent is the foreground itself and
    colour is spent only on state, which is also what suits the OLED panel.
    It is the default, so it also covers the frame before `main.tsx` sets the
@@ -91,11 +86,14 @@
 [data-theme="obsidian"] {
   color-scheme: dark;
   --app-surface: oklch(0% 0 0);
-  --app-surface-raised: oklch(17% 0 90);
-  /* Not black like the surface: a sunken well on true black is invisible, and
-     it is what tells an input apart from the page it sits on. */
-  --app-surface-sunken: oklch(9% 0 90);
-  --app-border-subtle: oklch(40% 0 90);
+  /* True black is the hardest page to raise anything off, and it is the one the
+     app opens in. With the hairline gone these two steps carry the whole depth of
+     the interface, so they are set where a card is unmistakably a card at arm's
+     length rather than where the difference is merely measurable. */
+  --app-surface-raised: oklch(24% 0 90);
+  /* A well below the page, still visible on black: it is what tells an input
+     apart from what it sits on, and from the card it sits inside. */
+  --app-surface-sunken: oklch(13% 0 90);
   --app-content: oklch(95% 0 90);
   --app-content-muted: oklch(71% 0 90);
   --app-accent: oklch(95% 0 90);
@@ -158,10 +156,6 @@
   --note-l2: 31%;
   --note-c1: 0.078;
   --note-c2: 0.072;
-  /* The border runs clearly lighter than the block it edges: a card whose edge
-     is only a shade off its own fill loses its corners against the page. */
-  --note-lb: 53%;
-  --note-cb: 0.076;
   --note-ink: oklch(97% 0.004 255);
   --note-ink-muted: oklch(97% 0.004 255 / 0.72);
   --note-link: oklch(83% 0.11 240);
@@ -171,7 +165,6 @@
     oklch(var(--note-l1) calc(var(--note-c1) * var(--note-c-scale)) var(--note-h1)) 0%,
     oklch(var(--note-l2) calc(var(--note-c2) * var(--note-c-scale)) var(--note-h2)) 100%
   );
-  border-color: oklch(var(--note-lb) calc(var(--note-cb) * var(--note-c-scale)) var(--note-h1));
   color: var(--note-ink);
   /* Links inside a coloured note answer to the note, not to the app surface. */
   --app-link: var(--note-link);
@@ -189,8 +182,6 @@
   --note-l2: 19%;
   --note-c1: 0.055;
   --note-c2: 0.050;
-  --note-lb: 43%;
-  --note-cb: 0.050;
 }
 
 /* Secondary text on a coloured note. */
@@ -209,13 +200,14 @@ html.note-surface body {
    note. On a coloured note they become the note's own ink, thinned. */
 .note-surface [data-panel] {
   background-color: color-mix(in oklab, var(--note-ink) 8%, transparent);
-  border-color: color-mix(in oklab, var(--note-ink) 22%, transparent);
 }
 
+/* One step further into the note than the panel around it: with no outline left,
+   the difference between a field and the panel holding it is this and nothing
+   else. */
 .note-surface [data-panel] input,
 .note-surface [data-panel] textarea {
-  background-color: color-mix(in oklab, var(--note-ink) 10%, transparent);
-  border-color: color-mix(in oklab, var(--note-ink) 24%, transparent);
+  background-color: color-mix(in oklab, var(--note-ink) 18%, transparent);
   color: var(--note-ink);
 }
 
@@ -270,10 +262,14 @@ html.note-surface body {
 
 @layer base {
   html {
-    /* The WebView must never bounce or zoom — this is a native-feeling app. */
+    /* The WebView must never bounce or zoom — this is a native-feeling app.
+       `pan-x pan-y` rather than `manipulation`: the latter only refuses the
+       double tap, and the pinch is the gesture that actually happens by accident
+       while scrolling with a thumb and a finger on the screen. Scrolling both
+       ways is all that is left. */
     -webkit-text-size-adjust: 100%;
     -webkit-tap-highlight-color: transparent;
-    touch-action: manipulation;
+    touch-action: pan-x pan-y;
     background-color: var(--app-surface);
   }
 

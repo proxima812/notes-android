@@ -190,6 +190,21 @@ export async function emptyTrash(): Promise<number> {
   return callCommand("notes_empty_trash", z.number().int(), {});
 }
 
+/**
+ * Lets go of everything whose hour in the trash is up, answering how many.
+ *
+ * Nothing runs on a timer inside the core, so this is asked when the answer is
+ * about to be shown: on start and whenever the trash is opened. The screen also
+ * hides an expired note it is still holding, because the sweep happens when
+ * someone looks rather than on the minute.
+ */
+export async function purgeExpiredTrash(): Promise<number> {
+  return callCommand("notes_purge_expired", z.number().int(), {});
+}
+
+/** How long a note stays in the trash. Mirrors `TRASH_RETENTION_MINUTES`. */
+export const TRASH_RETENTION_MS = 60 * 60 * 1000;
+
 export async function duplicateNote(id: NoteId): Promise<Note> {
   return callCommand("notes_duplicate", noteSchema, { id });
 }

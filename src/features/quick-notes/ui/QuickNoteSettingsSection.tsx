@@ -111,8 +111,8 @@ export function QuickNoteSettingsSection(): React.JSX.Element {
                   save.mutate({ ...current, leadMinutes: minutes });
                 }
               }}
-              className={`min-h-11 shrink-0 rounded-xl border px-3 text-sm ${
-                chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
+              className={`min-h-11 shrink-0 rounded-xl px-3 text-sm ${
+                chosen ? "bg-accent text-accent-content" : "bg-surface-raised text-content-muted"
               }`}
             >
               {leadLabel(minutes, t)}
@@ -169,8 +169,8 @@ export function QuickNoteSettingsSection(): React.JSX.Element {
                   });
                 }
               }}
-              className={`min-h-11 flex-1 rounded-xl border px-3 text-sm ${
-                chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
+              className={`min-h-11 flex-1 rounded-xl px-3 text-sm ${
+                chosen ? "bg-accent text-accent-content" : "bg-surface-raised text-content-muted"
               }`}
             >
               {t(choice.labelKey)}
@@ -196,7 +196,7 @@ export function QuickNoteSettingsSection(): React.JSX.Element {
                 save.mutate({ ...current, fallbackDayOffset: days });
               }
             }}
-            className="border-border-subtle text-content focus:border-accent min-h-11 w-20 rounded-xl border bg-transparent px-3 text-base tabular-nums outline-none"
+            className="bg-surface-raised text-content focus:ring-accent min-h-11 w-20 rounded-xl px-3 text-base tabular-nums outline-none focus:ring-2"
           />
         </label>
       )}

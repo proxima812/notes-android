@@ -106,7 +106,7 @@ export function BackupSection(): React.JSX.Element {
               setOutcome(null);
               setConfirming(true);
             }}
-            className="border-border-subtle text-content flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium disabled:opacity-40"
+            className="bg-surface-raised text-content flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium disabled:opacity-40"
           >
             <Upload className="size-4" />
             {t("backup.import")}

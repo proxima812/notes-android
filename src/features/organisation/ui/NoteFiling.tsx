@@ -77,7 +77,7 @@ export function NoteFiling({ noteId }: { readonly noteId: NoteId }): React.JSX.E
     <section
       aria-label={t("filing.title")}
       data-panel=""
-      className="bg-surface-sunken border-border-subtle flex flex-col gap-2 rounded-2xl border p-4"
+      className="bg-surface-sunken flex flex-col gap-2 rounded-2xl p-4"
     >
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-content-muted text-sm font-medium">{t("filing.title")}</h3>
@@ -97,8 +97,8 @@ export function NoteFiling({ noteId }: { readonly noteId: NoteId }): React.JSX.E
       <div className="flex flex-wrap gap-2">
         {(allTags.data ?? []).map((tag) => {
           const chosen = chosenTags.includes(tag.id);
-          const frame = `flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm ${
-            chosen ? "border-accent text-content" : "border-border-subtle text-content-muted"
+          const frame = `flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm ${
+            chosen ? "bg-accent text-accent-content" : "bg-surface-raised text-content-muted"
           }`;
 
           // Two controls cannot nest in one button, so the editing chip is a
@@ -165,7 +165,7 @@ export function NoteFiling({ noteId }: { readonly noteId: NoteId }): React.JSX.E
           onChange={(event) => {
             setNewTag(event.target.value);
           }}
-          className="bg-surface border-border-subtle text-content min-h-11 flex-1 rounded-xl border px-3 outline-none focus:border-accent"
+          className="bg-surface text-content focus:ring-accent min-h-11 flex-1 rounded-xl px-3 outline-none focus:ring-2"
         />
         <button
           type="button"
@@ -174,7 +174,7 @@ export function NoteFiling({ noteId }: { readonly noteId: NoteId }): React.JSX.E
           onClick={() => {
             addTag.mutate(newTag);
           }}
-          className="bg-surface-raised border-border-subtle text-content flex size-11 shrink-0 items-center justify-center rounded-xl border disabled:opacity-40"
+          className="bg-surface-raised text-content flex size-11 shrink-0 items-center justify-center rounded-xl disabled:opacity-40"
         >
           <Plus className="size-4" />
         </button>

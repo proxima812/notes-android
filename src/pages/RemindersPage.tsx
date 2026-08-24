@@ -1,28 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlarmClock, ArrowLeft, Repeat } from "lucide-react";
 
-import { formatDue } from "@/features/reminders/dueLabel";
+import { dueSentence } from "@/features/reminders/dueLabel";
 import {
   listNotesWithReminders,
   type NoteWithReminders,
   type Reminder,
 } from "@/features/reminders/api";
 import { describeError } from "@/shared/api/errors";
-import { useLanguage, useT, type LanguageId, type Translate } from "@/shared/i18n";
+import { useLanguage, useT } from "@/shared/i18n";
 import { useBackGuard } from "@/shared/lib/useBackGuard";
 import type { NoteId } from "@/shared/types/ids";
-
-/** When a reminder is due, said the way someone would say it out loud. */
-function whenLabel(at: number, language: LanguageId, t: Translate): string {
-  const due = formatDue(at, Date.now(), language);
-  if (due.day === "today") {
-    return t("reminders.today", { time: due.time });
-  }
-  if (due.day === "tomorrow") {
-    return t("reminders.tomorrow", { time: due.time });
-  }
-  return `${due.date ?? ""}, ${due.time}`;
-}
 
 function ReminderLine({
   reminder,
@@ -37,7 +25,9 @@ function ReminderLine({
   return (
     <li className="text-content-muted flex items-center gap-2 text-sm">
       <AlarmClock className="text-accent size-4 shrink-0" />
-      <span className="shrink-0 tabular-nums">{whenLabel(reminder.scheduledAt, language, t)}</span>
+      <span className="shrink-0 tabular-nums">
+        {dueSentence(reminder.scheduledAt, Date.now(), language, t)}
+      </span>
       {/* The reminder's own name only when it is not the note's: the panel
           lets it be edited, and a line repeating the heading above it says
           nothing while taking the width that the time needs. */}
@@ -69,7 +59,7 @@ function NoteRow({
         onClick={() => {
           onOpen(entry.note.id);
         }}
-        className="bg-surface-raised border-border-subtle w-full rounded-2xl border p-4 text-left"
+        className="bg-surface-raised w-full rounded-2xl p-4 text-left"
       >
         <p className="text-content truncate font-medium">{title}</p>
         <ul className="mt-2 space-y-1">

@@ -1,13 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Check } from "lucide-react";
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 import { BackupSection } from "@/features/backup/ui/BackupSection";
 import { appInfo } from "@/features/notes/api";
 import { QuickNoteSettingsSection } from "@/features/quick-notes/ui/QuickNoteSettingsSection";
 import { SnoozeSettingSection } from "@/features/reminders/ui/SnoozeSettingSection";
+import { LanguagePicker } from "@/features/settings/ui/LanguagePicker";
 import { describeError } from "@/shared/api/errors";
-import { useT } from "@/shared/i18n";
+import { LANGUAGES, useLanguage, useT } from "@/shared/i18n";
 import {
   DEFAULT_APP_NAME,
   MAX_APP_NAME_LENGTH,
@@ -89,7 +90,7 @@ function AppNameSection(): React.JSX.Element {
           setDraft(typed);
           save(typed);
         }}
-        className="border-border-subtle text-content placeholder:text-content-muted/60 focus:border-accent min-h-11 rounded-2xl border bg-transparent px-4 text-base outline-none"
+        className="bg-surface-raised text-content placeholder:text-content-muted/60 focus:ring-accent min-h-11 rounded-2xl px-4 text-base outline-none focus:ring-2"
       />
       <p className="text-content-muted text-xs">
         {t("appName.hint", { max: MAX_APP_NAME_LENGTH })}
@@ -110,7 +111,11 @@ function AppNameSection(): React.JSX.Element {
  */
 export function SettingsPage({ onBack }: { readonly onBack: () => void }): React.JSX.Element {
   const [theme, choose] = useTheme();
+  const [language] = useLanguage();
+  const [languageOpen, setLanguageOpen] = useState(false);
   const t = useT();
+  const currentTheme = APP_THEMES.find((option) => option.id === theme);
+  const currentLanguage = LANGUAGES.find((option) => option.id === language);
 
   useBackGuard(true, onBack);
 
@@ -134,9 +139,15 @@ export function SettingsPage({ onBack }: { readonly onBack: () => void }): React
 
       <SnoozeSettingSection />
 
+      {/* The palette, said as four dots.
+          What this replaced was four labelled panels of gradient, which made the
+          quietest setting in the app the loudest thing on the screen — and none
+          of that area said anything the colour itself does not. What is left is
+          the colour, a ring round the one in use, and its name written once
+          underneath. */}
       <section className="flex flex-col gap-3">
         <h2 className="text-content-muted text-sm font-medium">{t("theme.appearance")}</h2>
-        <div role="radiogroup" aria-label={t("theme.title")} className="grid grid-cols-2 gap-3">
+        <div role="radiogroup" aria-label={t("theme.title")} className="flex gap-3">
           {APP_THEMES.map((option) => {
             const selected = option.id === theme;
             return (
@@ -145,37 +156,54 @@ export function SettingsPage({ onBack }: { readonly onBack: () => void }): React
                 type="button"
                 role="radio"
                 aria-checked={selected}
+                aria-label={t(option.labelKey)}
                 onClick={() => {
                   choose(option.id);
                 }}
-                className={`relative flex min-h-24 flex-col justify-end overflow-hidden rounded-2xl border p-3 text-left transition-colors ${
-                  selected ? "border-accent" : "border-border-subtle"
+                // The ring is drawn outside the swatch with a gap, so it reads as
+                // a mark of choice rather than as an edge of the colour — and so
+                // the near-black Обсидиан dot is still visible when it is the one
+                // chosen.
+                className={`size-11 rounded-full ${
+                  selected ? "ring-accent ring-offset-surface ring-2 ring-offset-2" : ""
                 }`}
-              >
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-0"
-                  style={{ backgroundImage: option.swatch }}
-                />
-                {/* The scrim is what keeps the label readable on the yellow
-                    preset, where the gradient itself is near-white. */}
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent"
-                />
-                <span className="relative text-sm font-semibold text-white drop-shadow">
-                  {t(option.labelKey)}
-                </span>
-                {selected && (
-                  <span className="text-accent-content bg-accent absolute top-2 right-2 flex size-6 items-center justify-center rounded-full">
-                    <Check className="size-4" />
-                  </span>
-                )}
-              </button>
+                style={{ backgroundImage: option.swatch }}
+              />
             );
           })}
         </div>
+        {currentTheme !== undefined && (
+          <p className="text-content-muted text-xs">{t(currentTheme.labelKey)}</p>
+        )}
       </section>
+
+      {/* Language moved in here from the library header, where it was a third
+          icon competing with search and settings. The endonym is on the row, so
+          the way out of a language you cannot read is still a word you can. */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-content-muted text-sm font-medium">{t("language.title")}</h2>
+        <button
+          type="button"
+          aria-expanded={languageOpen}
+          onClick={() => {
+            setLanguageOpen(true);
+          }}
+          className="bg-surface-raised text-content flex min-h-12 items-center justify-between rounded-2xl px-4 text-left"
+        >
+          <span className="font-medium" lang={currentLanguage?.id}>
+            {currentLanguage?.label ?? ""}
+          </span>
+          <ChevronRight aria-hidden="true" className="text-content-muted size-5 shrink-0" />
+        </button>
+      </section>
+
+      {languageOpen && (
+        <LanguagePicker
+          onClose={() => {
+            setLanguageOpen(false);
+          }}
+        />
+      )}
 
       <BackupSection />
 

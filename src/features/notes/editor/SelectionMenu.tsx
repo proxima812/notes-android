@@ -26,7 +26,7 @@ export function SelectionMenu({ editor }: { readonly editor: Editor }): React.JS
       shouldShow={({ editor: current, from, to }) =>
         current.isEditable && from !== to && !current.state.selection.empty
       }
-      className="bg-surface-raised border-border-subtle z-40 flex items-center gap-1 rounded-2xl border p-1 shadow-lg"
+      className="bg-surface-raised z-40 flex items-center gap-1 rounded-2xl p-1 shadow-lg"
     >
       {actions.map(({ key, label, icon: Icon, active, run }) => (
         <button

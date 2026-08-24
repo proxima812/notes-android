@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { NoteSummary } from "@/features/notes/api";
 
-import { NoteCard } from "./NoteCard";
+import { NoteCard, type NoteCardActions } from "./NoteCard";
 
 const note: NoteSummary = {
   id: "note_1" as NoteSummary["id"],
@@ -21,11 +21,26 @@ const note: NoteSummary = {
   tags: [],
 };
 
+const inLibrary: NoteCardActions = {
+  kind: "library",
+  onArchive: vi.fn(),
+  onDelete: vi.fn(),
+};
+
 beforeAll(() => {
   // jsdom has no pointer capture; the gesture only needs the calls to succeed.
   Element.prototype.setPointerCapture = vi.fn();
   Element.prototype.releasePointerCapture = vi.fn();
 });
+
+/** The element the gesture is on: the one the open button sits inside. */
+function cardOf(): HTMLElement {
+  const card = screen.getByRole("button", { name: /Открыть заметку/ }).parentElement;
+  if (card === null) {
+    throw new Error("card element missing");
+  }
+  return card;
+}
 
 function setup() {
   const onOpen = vi.fn();
@@ -33,14 +48,15 @@ function setup() {
   const onDelete = vi.fn();
   render(
     <ul>
-      <NoteCard note={note} busy={false} onOpen={onOpen} onArchive={onArchive} onDelete={onDelete} />
+      <NoteCard
+        note={note}
+        busy={false}
+        onOpen={onOpen}
+        actions={{ kind: "library", onArchive, onDelete }}
+      />
     </ul>,
   );
-  const card = screen.getByRole("button", { name: /Открыть заметку/ }).parentElement;
-  if (card === null) {
-    throw new Error("card element missing");
-  }
-  return { card, onOpen, onArchive, onDelete };
+  return { card: cardOf(), onOpen, onArchive, onDelete };
 }
 
 /** One gesture: press, a few moves so the slop is passed, release. */
@@ -103,8 +119,7 @@ describe("NoteCard tags", () => {
           note={{ ...note, tags: ["работа", "дом"] }}
           busy={false}
           onOpen={vi.fn()}
-          onArchive={vi.fn()}
-          onDelete={vi.fn()}
+          actions={inLibrary}
         />
       </ul>,
     );
@@ -115,16 +130,102 @@ describe("NoteCard tags", () => {
   it("shows no tag line at all when the note wears none", () => {
     render(
       <ul>
-        <NoteCard
-          note={note}
-          busy={false}
-          onOpen={vi.fn()}
-          onArchive={vi.fn()}
-          onDelete={vi.fn()}
-        />
+        <NoteCard note={note} busy={false} onOpen={vi.fn()} actions={inLibrary} />
       </ul>,
     );
 
     expect(screen.queryByText(/#/)).not.toBeInTheDocument();
+  });
+});
+
+describe("NoteCard reminder", () => {
+  it("says when the soonest reminder goes off", () => {
+    const at = new Date();
+    at.setDate(at.getDate() + 1);
+    at.setHours(8, 0, 0, 0);
+
+    render(
+      <ul>
+        <NoteCard
+          note={note}
+          busy={false}
+          reminderAt={at.getTime()}
+          onOpen={vi.fn()}
+          actions={inLibrary}
+        />
+      </ul>,
+    );
+
+    expect(screen.getByText("Завтра, 08:00")).toBeInTheDocument();
+  });
+
+  it("says nothing at all on a note that is not going to ask for anything", () => {
+    render(
+      <ul>
+        <NoteCard note={note} busy={false} onOpen={vi.fn()} actions={inLibrary} />
+      </ul>,
+    );
+
+    expect(screen.queryByLabelText("Напоминание")).not.toBeInTheDocument();
+  });
+});
+
+describe("NoteCard in the trash", () => {
+  const trashed = { ...note, deletedAt: Date.now() };
+
+  it("counts down what is left of the hour, and offers both ways out", () => {
+    render(
+      <ul>
+        <NoteCard
+          note={trashed}
+          busy={false}
+          onOpen={vi.fn()}
+          actions={{ kind: "trash", minutesLeft: 47, onRestore: vi.fn(), onPurge: vi.fn() }}
+        />
+      </ul>,
+    );
+
+    expect(screen.getByText("Осталось 47 мин")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Восстановить" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Удалить насовсем" })).toBeInTheDocument();
+  });
+
+  it("says «меньше минуты» rather than counting down to zero", () => {
+    render(
+      <ul>
+        <NoteCard
+          note={trashed}
+          busy={false}
+          onOpen={vi.fn()}
+          actions={{ kind: "trash", minutesLeft: 0, onRestore: vi.fn(), onPurge: vi.fn() }}
+        />
+      </ul>,
+    );
+
+    expect(screen.getByText("Осталось меньше минуты")).toBeInTheDocument();
+  });
+
+  // Erasing for good is not something a thumb should be able to do by accident,
+  // and there is nothing reversible left for the other direction to offer.
+  it("does not slide", () => {
+    const onRestore = vi.fn();
+    const onPurge = vi.fn();
+    render(
+      <ul>
+        <NoteCard
+          note={trashed}
+          busy={false}
+          onOpen={vi.fn()}
+          actions={{ kind: "trash", minutesLeft: 30, onRestore, onPurge }}
+        />
+      </ul>,
+    );
+
+    const card = cardOf();
+    swipe(card, 140);
+    swipe(card, -140);
+
+    expect(onRestore).not.toHaveBeenCalled();
+    expect(onPurge).not.toHaveBeenCalled();
   });
 });

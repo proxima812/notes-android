@@ -8,11 +8,14 @@ export const tt: Dictionary = {
 
   "library.tabActive": "Язмалар",
   "library.tabArchived": "Архив",
+  "library.tabTrash": "Чүплек",
   "library.search": "Эзләү",
   "library.searchInProgress": "Эзләнә…",
   "library.nothingFound": "Һичнәрсә табылмады.",
   "library.searchHint": "Яза башлагыз — язмалар исеме һәм тексты буенча табыла.",
   "library.archiveEmpty": "Архив буш.",
+  "library.trashEmpty": "Чүплек буш.",
+  "library.trashHint": "Бетерелгәне монда бер сәгать саклана, аннары бөтенләй юкка чыга.",
   "library.empty": "Әлегә буш. Беренче язмагызны булдырыгыз.",
   "library.newNote": "Яңа язма",
   "library.templates": "Үрнәкләр",
@@ -21,6 +24,10 @@ export const tt: Dictionary = {
   "card.archive": "Архивка",
   "card.unarchive": "Архивтан кайтару",
   "card.trash": "Чүплеккә",
+  "card.restore": "Кайтару",
+  "card.purge": "Бөтенләй бетерү",
+  "card.trashLeft": "{minutes} мин калды",
+  "card.trashSoon": "Бер минуттан ким калды",
 
   "editor.notFound": "Язма табылмады.",
   "editor.saving": "Саклана…",
@@ -186,11 +193,9 @@ export const tt: Dictionary = {
 
   "theme.title": "Бизәлеш темасы",
   "theme.appearance": "Бизәлеш",
-  "theme.close": "Тема сайлауны ябу",
   "theme.mint": "Бөтнек",
   "theme.indigo": "Индиго",
   "theme.amethyst": "Аметист",
-  "theme.amber": "Гәрәбә",
   "theme.obsidian": "Обсидиан",
 
   "color.sunset": "Кояш баю",

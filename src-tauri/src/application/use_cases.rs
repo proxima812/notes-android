@@ -79,6 +79,24 @@ impl NoteUseCases {
         self.notes.purge_trash(None)
     }
 
+    /// Lets go of everything that has been in the trash longer than the hour it
+    /// is kept for, and answers how many notes that was.
+    ///
+    /// Nothing wakes the core on a timer, so this is asked whenever the trash is
+    /// worth being right: at start and when the screen showing it opens. That is
+    /// why the frontend also hides an expired note it is still holding — the
+    /// sweep happens when someone looks, not on the minute.
+    ///
+    /// # Errors
+    /// Fails on a database error.
+    pub fn purge_expired_trash(&self) -> AppResult<u32> {
+        self.notes.purge_trash(Some(
+            self.clock
+                .now()
+                .saturating_add_minutes(-crate::domain::notes::TRASH_RETENTION_MINUTES),
+        ))
+    }
+
     /// # Errors
     /// Fails when a request identifier is malformed, or on a database error.
     pub fn list(&self, request: &ListNotesRequest) -> AppResult<Page<Note>> {
@@ -1179,6 +1197,51 @@ mod tests {
         let removed = f.notes.empty_trash().expect("empties");
         assert_eq!(removed, 1);
         assert!(f.notes.get(&id).expect("reads").is_none());
+    }
+
+    /// The trash is a chance to change your mind, not an archive: what has sat
+    /// in it for longer than an hour goes, and what was deleted a minute ago
+    /// stays whether or not the sweep runs.
+    #[test]
+    fn a_note_in_the_trash_is_let_go_of_only_once_its_hour_is_up() {
+        let deleted_at = 1_700_000_000_000;
+        let database = Arc::new(Database::open_in_memory(deleted_at).expect("opens"));
+        let repository = Arc::new(SqliteNoteRepository::new(
+            Arc::clone(&database),
+            Arc::new(FixedClock::new(Timestamp::from_millis(deleted_at))),
+        ));
+
+        // Three clocks over one repository: the trash was filled at the first,
+        // and the sweep is then asked at two later instants.
+        let at = |offset_minutes: i64| {
+            NoteUseCases::new(
+                Arc::clone(&repository) as Arc<dyn NoteRepository>,
+                Arc::new(FixedClock::new(
+                    Timestamp::from_millis(deleted_at).saturating_add_minutes(offset_minutes),
+                )),
+            )
+        };
+
+        let notes = at(0);
+        let id = notes
+            .create(NoteDraft {
+                title: Some("Черновик".to_owned()),
+                ..NoteDraft::default()
+            })
+            .expect("creates")
+            .id
+            .to_string();
+        notes.move_to_trash(&id).expect("trashes");
+
+        assert_eq!(
+            at(59).purge_expired_trash().expect("sweeps"),
+            0,
+            "a note deleted 59 minutes ago is still recoverable"
+        );
+        assert!(at(59).get(&id).expect("reads").is_some());
+
+        assert_eq!(at(61).purge_expired_trash().expect("sweeps"), 1);
+        assert!(at(61).get(&id).expect("reads").is_none());
     }
 
     #[test]

@@ -8,11 +8,14 @@ export const es: Dictionary = {
 
   "library.tabActive": "Notas",
   "library.tabArchived": "Archivo",
+  "library.tabTrash": "Papelera",
   "library.search": "Buscar",
   "library.searchInProgress": "Buscando…",
   "library.nothingFound": "No se encontró nada.",
   "library.searchHint": "Empieza a escribir: se busca por título y texto.",
   "library.archiveEmpty": "El archivo está vacío.",
+  "library.trashEmpty": "La papelera está vacía.",
+  "library.trashHint": "Lo borrado se queda aquí una hora y después se elimina para siempre.",
   "library.empty": "Aún no hay nada. Crea tu primera nota.",
   "library.newNote": "Nota nueva",
   "library.templates": "Plantillas",
@@ -21,6 +24,10 @@ export const es: Dictionary = {
   "card.archive": "Archivar",
   "card.unarchive": "Sacar del archivo",
   "card.trash": "Mover a la papelera",
+  "card.restore": "Restaurar",
+  "card.purge": "Eliminar para siempre",
+  "card.trashLeft": "Quedan {minutes} min",
+  "card.trashSoon": "Queda menos de un minuto",
 
   "editor.notFound": "Nota no encontrada.",
   "editor.saving": "Guardando…",
@@ -186,11 +193,9 @@ export const es: Dictionary = {
 
   "theme.title": "Tema",
   "theme.appearance": "Apariencia",
-  "theme.close": "Cerrar el selector de tema",
   "theme.mint": "Menta",
   "theme.indigo": "Índigo",
   "theme.amethyst": "Amatista",
-  "theme.amber": "Ámbar",
   "theme.obsidian": "Obsidiana",
 
   "color.sunset": "Atardecer",

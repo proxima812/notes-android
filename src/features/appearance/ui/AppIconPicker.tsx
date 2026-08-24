@@ -48,8 +48,8 @@ export function AppIconPicker(): React.JSX.Element | null {
               onClick={() => {
                 choose.mutate(icon.id);
               }}
-              className={`flex min-h-14 items-center gap-3 rounded-2xl border px-3 text-left disabled:opacity-40 ${
-                selected ? "border-accent" : "border-border-subtle"
+              className={`bg-surface-raised flex min-h-14 items-center gap-3 rounded-2xl px-3 text-left disabled:opacity-40 ${
+                selected ? "ring-accent ring-2" : ""
               }`}
             >
               {/* The artwork itself, not a swatch standing in for it: the
@@ -62,7 +62,7 @@ export function AppIconPicker(): React.JSX.Element | null {
                 width={32}
                 height={32}
                 loading="lazy"
-                className="border-border-subtle size-8 shrink-0 rounded-xl border object-cover"
+                className="bg-surface size-8 shrink-0 rounded-xl object-cover"
                 style={{ backgroundColor: icon.accent }}
               />
               <span className="text-content flex-1 text-sm font-medium">{icon.label}</span>

@@ -25,7 +25,7 @@ export function GradientPicker({ value, onChange }: GradientPickerProps): React.
         onClick={() => {
           onChange(null);
         }}
-        className="border-border-subtle text-content-muted flex size-11 shrink-0 items-center justify-center rounded-full border"
+        className="bg-surface-raised text-content-muted flex size-11 shrink-0 items-center justify-center rounded-full"
       >
         {value === null ? <Check className="size-5" /> : <Ban className="size-4" />}
       </button>

@@ -8,11 +8,14 @@ export const zh: Dictionary = {
 
   "library.tabActive": "笔记",
   "library.tabArchived": "归档",
+  "library.tabTrash": "回收站",
   "library.search": "搜索",
   "library.searchInProgress": "搜索中…",
   "library.nothingFound": "没有找到内容。",
   "library.searchHint": "开始输入：按标题和正文查找笔记。",
   "library.archiveEmpty": "归档是空的。",
+  "library.trashEmpty": "回收站是空的。",
+  "library.trashHint": "删除的笔记会在这里保留一小时，然后被彻底清除。",
   "library.empty": "这里还是空的。创建第一条笔记吧。",
   "library.newNote": "新建笔记",
   "library.templates": "模板",
@@ -21,6 +24,10 @@ export const zh: Dictionary = {
   "card.archive": "归档",
   "card.unarchive": "移出归档",
   "card.trash": "移到回收站",
+  "card.restore": "恢复",
+  "card.purge": "彻底删除",
+  "card.trashLeft": "还剩 {minutes} 分钟",
+  "card.trashSoon": "还剩不到一分钟",
 
   "editor.notFound": "找不到这条笔记。",
   "editor.saving": "保存中…",
@@ -186,11 +193,9 @@ export const zh: Dictionary = {
 
   "theme.title": "主题",
   "theme.appearance": "外观",
-  "theme.close": "关闭主题选择",
   "theme.mint": "薄荷",
   "theme.indigo": "靛蓝",
   "theme.amethyst": "紫晶",
-  "theme.amber": "琥珀",
   "theme.obsidian": "曜石",
 
   "color.sunset": "日落",

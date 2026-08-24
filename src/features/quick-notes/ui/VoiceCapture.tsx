@@ -359,7 +359,7 @@ export function VoiceCapture({ onCreated, onClose }: VoiceCaptureProps): React.J
           onClick={() => {
             downloadLanguageModel(chosen.tag).catch(() => undefined);
           }}
-          className="border-border-subtle text-content flex min-h-11 items-center gap-2 rounded-2xl border px-4 text-sm"
+          className="bg-surface-raised text-content flex min-h-11 items-center gap-2 rounded-2xl px-4 text-sm"
         >
           <Download className="size-4" />
           {t("quick.downloadModel")}
@@ -370,7 +370,7 @@ export function VoiceCapture({ onCreated, onClose }: VoiceCaptureProps): React.J
         <button
           type="button"
           onClick={onClose}
-          className="border-border-subtle text-content-muted min-h-12 flex-1 rounded-2xl border"
+          className="bg-surface-raised text-content-muted min-h-12 flex-1 rounded-2xl"
         >
           {t("quick.cancel")}
         </button>

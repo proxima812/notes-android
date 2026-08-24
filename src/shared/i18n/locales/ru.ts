@@ -22,11 +22,14 @@ export const ru = {
 
   "library.tabActive": "Заметки",
   "library.tabArchived": "Архив",
+  "library.tabTrash": "Корзина",
   "library.search": "Поиск",
   "library.searchInProgress": "Поиск…",
   "library.nothingFound": "Ничего не найдено.",
   "library.searchHint": "Начните вводить — заметки найдутся по названию и тексту.",
   "library.archiveEmpty": "Архив пуст.",
+  "library.trashEmpty": "Корзина пуста.",
+  "library.trashHint": "Удалённое лежит здесь час, потом стирается насовсем.",
   "library.empty": "Пока пусто. Создайте первую заметку.",
   "library.newNote": "Новая заметка",
   "library.templates": "Шаблоны",
@@ -35,6 +38,10 @@ export const ru = {
   "card.archive": "В архив",
   "card.unarchive": "Вернуть из архива",
   "card.trash": "В корзину",
+  "card.restore": "Восстановить",
+  "card.purge": "Удалить насовсем",
+  "card.trashLeft": "Осталось {minutes} мин",
+  "card.trashSoon": "Осталось меньше минуты",
 
   "editor.notFound": "Заметка не найдена.",
   "editor.saving": "Сохранение…",
@@ -200,11 +207,9 @@ export const ru = {
 
   "theme.title": "Тема оформления",
   "theme.appearance": "Оформление",
-  "theme.close": "Закрыть выбор темы",
   "theme.mint": "Мята",
   "theme.indigo": "Индиго",
   "theme.amethyst": "Аметист",
-  "theme.amber": "Янтарь",
   "theme.obsidian": "Обсидиан",
 
   "color.sunset": "Закат",

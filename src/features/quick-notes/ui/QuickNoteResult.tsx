@@ -96,7 +96,7 @@ export function QuickNoteResult({
     dictated.reminderError === null ? null : new AppError(dictated.reminderError);
 
   return (
-    <div className="border-border-subtle flex flex-col gap-2 rounded-2xl border p-3">
+    <div className="bg-surface-raised flex flex-col gap-2 rounded-2xl p-3">
       <div className="flex items-start gap-2">
         <p className="text-content min-w-0 flex-1 text-sm">
           {summary(dictated, reminder, language, t)}
@@ -148,7 +148,7 @@ export function QuickNoteResult({
               onClick={() => {
                 shift.mutate(minutes);
               }}
-              className="border-border-subtle text-content-muted min-h-9 rounded-xl border px-2 text-xs tabular-nums disabled:opacity-40"
+              className="bg-surface-sunken text-content-muted min-h-9 rounded-xl px-2 text-xs tabular-nums disabled:opacity-40"
             >
               {minutes > 0 ? `+${shiftLabel(minutes, t)}` : `−${shiftLabel(-minutes, t)}`}
             </button>

@@ -145,7 +145,7 @@ export function ReminderPanel({
     <section
       aria-label={t("reminder.title")}
       data-panel=""
-      className="bg-surface-sunken border-border-subtle rounded-2xl border p-4"
+      className="bg-surface-sunken rounded-2xl p-4"
     >
       <div className="mb-3 flex min-h-11 items-center gap-3">
         <h2 className="text-content flex-1 text-base font-semibold">{t("reminder.title")}</h2>
@@ -166,8 +166,8 @@ export function ReminderPanel({
             return (
               <li
                 key={item.id}
-                className={`bg-surface flex min-h-11 items-center gap-2 rounded-xl border px-3 ${
-                  editing ? "border-accent" : "border-border-subtle"
+                className={`bg-surface flex min-h-11 items-center gap-2 rounded-xl px-3 ${
+                  editing ? "ring-accent ring-2" : ""
                 }`}
               >
                 <button
@@ -210,7 +210,7 @@ export function ReminderPanel({
               setTitle(event.target.value);
               setLocalError(null);
             }}
-            className="bg-surface border-border-subtle text-content mt-1 min-h-11 w-full rounded-xl border px-3 outline-none focus:border-accent"
+            className="bg-surface text-content focus:ring-accent mt-1 min-h-11 w-full rounded-xl px-3 outline-none focus:ring-2"
           />
         </label>
 
@@ -305,7 +305,7 @@ export function ReminderPanel({
                         onClick={() => {
                           onSavePresets(presets.filter((item) => item !== preset));
                         }}
-                        className="bg-surface border-border-subtle text-content flex min-h-11 items-center gap-2 rounded-xl border px-3 text-sm"
+                        className="bg-surface text-content flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm"
                       >
                         {preset}
                         <X className="text-content-muted size-4" />
@@ -332,7 +332,7 @@ export function ReminderPanel({
                   type="button"
                   onClick={addPreset}
                   disabled={draftPreset === ""}
-                  className="bg-surface-raised text-content border-border-subtle flex min-h-11 items-center gap-1 rounded-xl border px-3 text-sm font-medium disabled:opacity-40"
+                  className="bg-surface-raised text-content flex min-h-11 items-center gap-1 rounded-xl px-3 text-sm font-medium disabled:opacity-40"
                 >
                   <Plus className="size-4" />
                   {t("reminder.presetAdd")}

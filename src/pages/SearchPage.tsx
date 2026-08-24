@@ -36,7 +36,7 @@ function SearchResult({
     </>
   );
 
-  const card = "bg-surface-raised border-border-subtle rounded-2xl border p-4";
+  const card = "bg-surface-raised rounded-2xl p-4";
 
   // Only a note hit carries a note id. A task or an attachment matched inside
   // some note, and this screen has nowhere to send those, so they are shown and
@@ -100,7 +100,7 @@ export function SearchPage({
         >
           <ArrowLeft className="size-5" />
         </button>
-        <label className="bg-surface-sunken border-border-subtle flex flex-1 items-center gap-2 rounded-2xl border px-4">
+        <label className="bg-surface-sunken flex flex-1 items-center gap-2 rounded-2xl px-4">
           <Search className="text-content-muted size-4 shrink-0" />
           <input
             type="search"

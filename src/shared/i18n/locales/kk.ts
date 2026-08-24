@@ -8,11 +8,14 @@ export const kk: Dictionary = {
 
   "library.tabActive": "Жазбалар",
   "library.tabArchived": "Мұрағат",
+  "library.tabTrash": "Себет",
   "library.search": "Іздеу",
   "library.searchInProgress": "Ізделуде…",
   "library.nothingFound": "Ештеңе табылмады.",
   "library.searchHint": "Жаза бастаңыз — жазбалар атауы мен мәтіні бойынша табылады.",
   "library.archiveEmpty": "Мұрағат бос.",
+  "library.trashEmpty": "Себет бос.",
+  "library.trashHint": "Өшірілгені осында бір сағат тұрады, содан кейін біржола жойылады.",
   "library.empty": "Әзірге бос. Алғашқы жазбаңызды жасаңыз.",
   "library.newNote": "Жаңа жазба",
   "library.templates": "Үлгілер",
@@ -21,6 +24,10 @@ export const kk: Dictionary = {
   "card.archive": "Мұрағатқа",
   "card.unarchive": "Мұрағаттан қайтару",
   "card.trash": "Себетке",
+  "card.restore": "Қалпына келтіру",
+  "card.purge": "Біржола жою",
+  "card.trashLeft": "{minutes} мин қалды",
+  "card.trashSoon": "Бір минуттан аз қалды",
 
   "editor.notFound": "Жазба табылмады.",
   "editor.saving": "Сақталуда…",
@@ -186,11 +193,9 @@ export const kk: Dictionary = {
 
   "theme.title": "Безендіру тақырыбы",
   "theme.appearance": "Безендіру",
-  "theme.close": "Тақырып таңдауды жабу",
   "theme.mint": "Жалбыз",
   "theme.indigo": "Индиго",
   "theme.amethyst": "Аметист",
-  "theme.amber": "Кәріптас",
   "theme.obsidian": "Обсидиан",
 
   "color.sunset": "Күн батысы",
