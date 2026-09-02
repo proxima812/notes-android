@@ -26,6 +26,26 @@ chrono-tz = { version = "0.10", features = ["serde"] }
 # depends on whatever ancient libsqlite3 a given Android image happens to ship.
 rusqlite = { version = "0.37", features = ["bundled", "chrono", "uuid", "backup", "functions"] }
 sha2 = "0.10"
+# Link previews are the one thing in the app that leaves the device: the title
+# and the icon of a pasted address are read from that address and nowhere else.
+# `rustls` rather than the platform stack so the trust roots are the same on
+# every Android version the app runs on.
+reqwest = { version = "0.13", default-features = false, features = [
+  "rustls-no-provider",
+  "blocking",
+  "charset",
+  "http2",
+] }
+# Splitting a URL and joining a relative icon path onto it. Both are already in
+# the tree behind `reqwest`; naming them here is what makes them usable.
+url = "2"
+encoding_rs = "0.8"
+base64 = "0.22"
+# The crypto provider is chosen here rather than left to default: the other one
+# `rustls` offers is `aws-lc`, whose C sources are a cross-compilation problem
+# on Android that `ring` does not have.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+webpki-roots = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 parking_lot = "0.12"

@@ -7,29 +7,22 @@ import StarterKit from "@tiptap/starter-kit";
 import { useT } from "@/shared/i18n";
 
 import { FormatToolbar } from "./FormatToolbar";
-import { siteOf } from "./linkSites";
+import { LinkPreviews } from "./LinkPreviewsExtension";
 import { SelectionMenu } from "./SelectionMenu";
 
 /**
- * The link mark, tagged with the service it points at.
+ * The link mark. Deliberately plain.
  *
- * `data-site` is computed while rendering rather than stored as an attribute:
- * the icon is a presentation detail, and baking it into `content_json` would
- * freeze today's mapping into every note ever saved.
- *
- * The icon is drawn by CSS as a `::before`, not as a DOM child, because anything
- * inside the anchor would be editable content the caret could land in.
+ * The icon used to be chosen here, from the href, while the mark rendered. That
+ * worked until an icon could arrive *after* the link was already on screen:
+ * nothing about the document changes when an answer comes back from the
+ * network, and ProseMirror had no reason to ask the mark to draw itself again —
+ * so the first icon it picked was the one that stayed. The icon is a decoration
+ * now (`LinkPreviewsExtension`), which is the mechanism that does update.
  */
 const LinkWithIcon = Link.extend({
   renderHTML({ HTMLAttributes }) {
-    const site = siteOf(HTMLAttributes["href"]);
-    return [
-      "a",
-      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
-        ...(site === null ? {} : { "data-site": site }),
-      }),
-      0,
-    ];
+    return ["a", mergeAttributes(this.options.HTMLAttributes, HTMLAttributes), 0];
   },
 });
 
@@ -101,7 +94,13 @@ export function RichTextEditor({
         protocols: ["http", "https", "mailto", "tel"],
       }),
       Placeholder.configure({ placeholder: t("editor.bodyPlaceholder") }),
+      LinkPreviews,
     ],
+    // The editor is built in an effect, not during render. The screen arrives
+    // through `lazy` + `Suspense`, and the first open is the one render React
+    // throws away and repeats; a ProseMirror view created during that discarded
+    // pass is the empty body people see until they leave and come back.
+    immediatelyRender: false,
     content: initialContent(initialJson, initialText),
     editorProps: {
       attributes: {

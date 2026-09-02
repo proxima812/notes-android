@@ -205,6 +205,9 @@ pub enum PlatformError {
     #[error("the Android plugin call failed")]
     PluginCall { reason: String },
 
+    #[error("the address could not be read")]
+    Network { reason: String },
+
     #[error("the application data directory is unavailable")]
     DataDirUnavailable,
 }
@@ -315,6 +318,7 @@ impl AppError {
             Self::Platform(error) => match error {
                 PlatformError::Unsupported { .. } => "platform_unsupported",
                 PlatformError::PluginCall { .. } => "platform_plugin_call_failed",
+                PlatformError::Network { .. } => "platform_network",
                 PlatformError::DataDirUnavailable => "platform_data_dir_unavailable",
             },
         }
@@ -428,6 +432,7 @@ impl AppError {
                     "Эта возможность недоступна на текущем устройстве.".to_owned()
                 }
                 PlatformError::PluginCall { .. } => "Системный компонент не ответил.".to_owned(),
+                PlatformError::Network { .. } => "Не удалось открыть адрес.".to_owned(),
                 PlatformError::DataDirUnavailable => "Хранилище приложения недоступно.".to_owned(),
             },
         }

@@ -1,6 +1,7 @@
 pub mod backup;
 pub mod backup_repository;
 pub mod connection;
+pub mod link_repository;
 pub mod migrations;
 pub mod note_repository;
 pub mod organisation_repository;
@@ -11,6 +12,7 @@ pub mod task_repository;
 
 pub use backup_repository::{SqliteBackupArchive, SqliteBackupRepository};
 pub use connection::Database;
+pub use link_repository::SqliteLinkPreviewRepository;
 pub use note_repository::SqliteNoteRepository;
 pub use organisation_repository::SqliteOrganisationRepository;
 pub use reminder_repository::SqliteReminderRepository;

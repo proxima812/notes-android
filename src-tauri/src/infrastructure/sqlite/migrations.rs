@@ -30,6 +30,11 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "drop_folders",
         sql: include_str!("../../../migrations/0002_drop_folders.sql"),
     },
+    Migration {
+        version: 3,
+        name: "link_previews",
+        sql: include_str!("../../../migrations/0003_link_previews.sql"),
+    },
 ];
 
 /// Highest schema version this build understands.

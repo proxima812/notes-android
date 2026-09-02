@@ -71,6 +71,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             application::commands::app_info,
+            application::commands::links_preview,
+            application::commands::links_forget_all,
             application::commands::notes_create,
             application::commands::notes_get,
             application::commands::notes_update,

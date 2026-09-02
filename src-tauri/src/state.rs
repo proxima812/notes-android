@@ -9,6 +9,7 @@ use std::sync::Arc;
 
 use crate::application::app_icons::AppIconUseCases;
 use crate::application::backup::BackupUseCases;
+use crate::application::links::LinkUseCases;
 use crate::application::organisation::OrganisationUseCases;
 use crate::application::quick_notes::QuickNoteUseCases;
 use crate::application::tasks::TaskUseCases;
@@ -16,9 +17,9 @@ use crate::application::use_cases::{NoteUseCases, ReminderUseCases, SearchUseCas
 use crate::domain::clock::{SharedClock, SystemClock};
 use crate::error::AppResult;
 use crate::infrastructure::sqlite::{
-    Database, SqliteBackupArchive, SqliteBackupRepository, SqliteNoteRepository,
-    SqliteOrganisationRepository, SqliteReminderRepository, SqliteSearchRepository,
-    SqliteSettingsRepository, SqliteTaskRepository,
+    Database, SqliteBackupArchive, SqliteBackupRepository, SqliteLinkPreviewRepository,
+    SqliteNoteRepository, SqliteOrganisationRepository, SqliteReminderRepository,
+    SqliteSearchRepository, SqliteSettingsRepository, SqliteTaskRepository,
 };
 use crate::platform::{AlarmClock, AppIconSwitch, DocumentStore};
 
@@ -34,6 +35,7 @@ pub struct AppState {
     pub organisation: Arc<OrganisationUseCases>,
     pub quick_notes: Arc<QuickNoteUseCases>,
     pub tasks: Arc<TaskUseCases>,
+    pub links: Arc<LinkUseCases>,
     pub database: Arc<Database>,
     pub clock: SharedClock,
 }
@@ -126,6 +128,14 @@ impl AppState {
             )),
             organisation: Arc::new(OrganisationUseCases::new(
                 Arc::new(SqliteOrganisationRepository::new(Arc::clone(&database))),
+                Arc::clone(&clock),
+            )),
+            // The only use case with a foot outside the device. Its reader is
+            // built here rather than injected, because there is exactly one and
+            // nothing else in the object graph has an opinion about it.
+            links: Arc::new(LinkUseCases::new(
+                Arc::new(SqliteLinkPreviewRepository::new(Arc::clone(&database))),
+                crate::platform::http_links::shared(),
                 Arc::clone(&clock),
             )),
             app_icons: Arc::new(AppIconUseCases::new(icons, settings)),

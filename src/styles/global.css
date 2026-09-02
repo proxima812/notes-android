@@ -386,7 +386,23 @@ html.note-surface body {
     word-break: break-word;
   }
 
-  .note-body a[data-site]::before {
+  /* A favicon the app fetched: a picture, not a glyph, so it is drawn rather
+     than used as a mask — a tinted silhouette of a company's logo would be
+     worse than no icon at all. */
+  .note-body [data-link-icon]::before {
+    content: "";
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-inline-end: 0.25em;
+    vertical-align: -0.135em;
+    background: var(--link-icon) center / contain no-repeat;
+    /* Icons drawn for a white page are common; a soft plate behind them keeps
+       them from disappearing into a dark theme. */
+    border-radius: 0.2em;
+  }
+
+  .note-body [data-link-site]::before {
     content: "";
     display: inline-block;
     width: 1em;

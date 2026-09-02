@@ -1,11 +1,14 @@
 /**
- * Which icon a link wears.
+ * Which icon a link wears before its site has been read.
  *
- * The mapping is a table of hosts rather than a favicon lookup: the app keeps
- * everything on the device, and asking a favicon service for an icon would send
- * every domain in your notes to a third party and still show nothing offline.
- * The cost is that only known services are recognised — everything else gets the
- * generic globe, which is the honest answer for a host we have no artwork for.
+ * A table of hosts rather than a favicon lookup, and it is still the first
+ * thing shown: the mark for a service somebody recognises is here in the
+ * binary, so it appears on a plane, in a tunnel, and in the instant before the
+ * network answers. Once `linkPreviewStore` has the site's own icon, that one
+ * replaces this — see the link mark in `RichTextEditor`.
+ *
+ * Unknown hosts get the generic globe, which is the honest answer for a site
+ * we have no artwork for and have not managed to read.
  *
  * The icons themselves live in `styles/linkIcons.css`, keyed by the names below.
  */

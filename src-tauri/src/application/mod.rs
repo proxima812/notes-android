@@ -2,6 +2,7 @@ pub mod app_icons;
 pub mod backup;
 pub mod commands;
 pub mod dto;
+pub mod links;
 pub mod organisation;
 pub mod quick_notes;
 pub mod tasks;

@@ -581,6 +581,34 @@ impl From<crate::domain::organisation::Tag> for TagDto {
     }
 }
 
+/// What a pasted address turned out to be, as the editor shows it.
+///
+/// `title` and `icon` are both nullable and both often null: a page the phone
+/// could not reach still comes back as a preview, so the editor can tell «not
+/// read yet» from «read, and there was nothing».
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkPreviewDto {
+    pub url: String,
+    pub title: Option<String>,
+    /// A `data:` URL, ready to go straight into `background-image`.
+    pub icon: Option<String>,
+    /// False when the last attempt did not reach the site. What is shown may
+    /// still be worth showing — it is simply older than it looks.
+    pub ok: bool,
+}
+
+impl From<crate::domain::links::LinkPreview> for LinkPreviewDto {
+    fn from(preview: crate::domain::links::LinkPreview) -> Self {
+        Self {
+            url: preview.url,
+            title: preview.title,
+            icon: preview.icon,
+            ok: preview.ok,
+        }
+    }
+}
+
 /// What a backup or restore did, as the settings screen reports it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

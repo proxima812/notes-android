@@ -17,10 +17,10 @@ use crate::state::AppState;
 
 use super::dto::{
     AppIconCatalogDto, BackupOutcomeDto, BackupRecordDto, CommandResult, CreateNoteRequest,
-    ListNotesRequest, NoteDto, NoteSummaryDto, NoteWithRemindersDto, PageDto, QuickNoteDto,
-    QuickNoteSettingsDto, ReminderDto, ReminderSoundCatalogDto, ReminderSoundDto, SearchHitDto,
-    SearchRequest, SnoozeSettingDto, TagDto, TaskDto, TaskProgressDto, UpdateNoteRequest,
-    UpsertReminderRequest,
+    LinkPreviewDto, ListNotesRequest, NoteDto, NoteSummaryDto, NoteWithRemindersDto, PageDto,
+    QuickNoteDto, QuickNoteSettingsDto, ReminderDto, ReminderSoundCatalogDto, ReminderSoundDto,
+    SearchHitDto, SearchRequest, SnoozeSettingDto, TagDto, TaskDto, TaskProgressDto,
+    UpdateNoteRequest, UpsertReminderRequest,
 };
 use super::use_cases::move_note_to_trash;
 
@@ -605,4 +605,33 @@ pub async fn search_recent(
 pub async fn search_clear_history(state: State<'_, AppState>) -> Result<CommandResult<()>, ()> {
     let search = Arc::clone(&state.search);
     Ok(blocking(move || search.clear_history()).await)
+}
+
+/// What an address is called, and what its icon looks like.
+///
+/// The one command in the app that leaves the device, and the reason it exists
+/// is that the WebView cannot do this itself: a page on another origin is not
+/// readable from JavaScript, and the icon would have to come from a third party
+/// instead of from the site. `None` means the address is not one the app
+/// fetches — a `mailto:` or a phone number — and the editor leaves it as it is.
+#[tauri::command]
+pub async fn links_preview(
+    state: State<'_, AppState>,
+    url: String,
+) -> Result<CommandResult<Option<LinkPreviewDto>>, ()> {
+    let links = Arc::clone(&state.links);
+    Ok(blocking(move || {
+        links
+            .preview(&url)
+            .map(|preview| preview.map(LinkPreviewDto::from))
+    })
+    .await)
+}
+
+/// Empties the cache of pages. Which sites someone has pasted is a record of
+/// what they read, so ending it has to be one press and must not touch a note.
+#[tauri::command]
+pub async fn links_forget_all(state: State<'_, AppState>) -> Result<CommandResult<()>, ()> {
+    let links = Arc::clone(&state.links);
+    Ok(blocking(move || links.forget_all()).await)
 }
